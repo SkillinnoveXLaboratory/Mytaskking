@@ -22,14 +22,13 @@ if ($plugin) {
     '(?m)^      windows:\r?\n        pluginClass: FlutterWebRTCPlugin\r?\n',
     ''
   )
-  if ($updatedManifest -eq $manifest) {
-    throw "flutter_webrtc Windows platform declaration was not found in $pluginManifest"
+  if ($updatedManifest -ne $manifest) {
+    [System.IO.File]::WriteAllText(
+      $pluginManifest,
+      $updatedManifest,
+      [System.Text.UTF8Encoding]::new($false)
+    )
   }
-  [System.IO.File]::WriteAllText(
-    $pluginManifest,
-    $updatedManifest,
-    [System.Text.UTF8Encoding]::new($false)
-  )
 }
 
 flutter pub get
