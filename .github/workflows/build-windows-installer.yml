@@ -23,6 +23,25 @@ jobs:
         shell: powershell
         run: choco install innosetup --no-progress -y
 
+      - name: Prepare Agora Windows plugin
+        working-directory: frontend/flutter_apps/windows_app
+        shell: powershell
+        run: |
+          flutter pub get
+          $pluginLink = Join-Path $PWD "windows/flutter/ephemeral/.plugin_symlinks/agora_rtc_engine"
+          if (Test-Path -LiteralPath $pluginLink) {
+            $pluginTarget = (Get-Item -LiteralPath $pluginLink -Force).Target
+            if (-not $pluginTarget) {
+              throw "Agora plugin link target could not be resolved: $pluginLink"
+            }
+            if (-not [System.IO.Path]::IsPathRooted($pluginTarget)) {
+              $pluginTarget = Join-Path (Split-Path $pluginLink) $pluginTarget
+            }
+            $pluginTarget = (Resolve-Path -LiteralPath $pluginTarget).Path
+            Remove-Item -LiteralPath $pluginLink -Force
+            Copy-Item -LiteralPath $pluginTarget -Destination $pluginLink -Recurse -Force
+          }
+
       - name: Build installer
         working-directory: frontend/flutter_apps/windows_app
         shell: powershell
