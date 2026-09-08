@@ -21,7 +21,7 @@ class _RemoteControlScreenState extends ConsumerState<RemoteControlScreen> {
   void initState() {
     super.initState();
     final rt = ref.read(realtimeProvider);
-    _offApproved = rt.onAny('remote.approved', (data) {
+    _offApproved = rt.onAny('remote.approved', ([data]) {
       if (mounted && data is Map) {
         final session = data.cast<String, dynamic>();
         setState(() {
@@ -31,7 +31,7 @@ class _RemoteControlScreenState extends ConsumerState<RemoteControlScreen> {
         rt.emit('remote.join', {'sessionId': session['id']});
       }
     });
-    _offStopped = rt.onAny('remote.stopped', (data) {
+    _offStopped = rt.onAny('remote.stopped', ([data]) {
       if (mounted)
         setState(() {
           _session = null;

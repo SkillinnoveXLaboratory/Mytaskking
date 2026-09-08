@@ -24,20 +24,20 @@ class _RemoteControlOverlayState extends ConsumerState<RemoteControlOverlay> {
   void initState() {
     super.initState();
     final rt = ref.read(realtimeProvider);
-    _cleanup.add(rt.onAny('remote.request', (data) {
+    _cleanup.add(rt.onAny('remote.request', ([data]) {
       if (!mounted || data is! Map) return;
       setState(() => _pending = data.cast<String, dynamic>());
     }));
-    _cleanup.add(rt.onAny('remote.approved', (data) {
+    _cleanup.add(rt.onAny('remote.approved', ([data]) {
       if (!mounted || data is! Map) return;
       setState(() => _active = data.cast<String, dynamic>());
     }));
-    _cleanup.add(rt.onAny('remote.stopped', (data) {
+    _cleanup.add(rt.onAny('remote.stopped', ([data]) {
       if (!mounted || data is! Map) return;
       final id = data['id']?.toString();
       if (_active?['id']?.toString() == id) setState(() => _active = null);
     }));
-    _cleanup.add(rt.onAny('remote.mouse', (data) {
+    _cleanup.add(rt.onAny('remote.mouse', ([data]) {
       if (data is! Map || !mounted) return;
       if (_active?['id']?.toString() != data['sessionId']?.toString()) return;
       DesktopNative.injectRemoteMouse(
