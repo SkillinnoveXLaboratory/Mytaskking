@@ -68,10 +68,14 @@ jobs:
               if ($extractExit -ne 0) {
                 throw "Failed to extract Agora $sdkName SDK"
               }
-              if ($sdkName -eq "iris" -and -not (Test-Path -LiteralPath (Join-Path $extractDir "x64/include"))) {
+              $sdkDirectories = Get-ChildItem -LiteralPath $extractDir -Directory -Recurse
+              $irisInclude = $sdkDirectories | Where-Object { $_.Name -eq "include" -and $_.Parent.Name -eq "x64" }
+              $irisRelease = $sdkDirectories | Where-Object { $_.Name -eq "Release" -and $_.Parent.Name -eq "x64" }
+              $nativeRoot = $sdkDirectories | Where-Object { $_.Name -eq "sdk" }
+              if ($sdkName -eq "iris" -and (-not $irisInclude -or -not $irisRelease)) {
                 throw "Agora Iris SDK is missing lib/x64/include after extraction"
               }
-              if ($sdkName -eq "native" -and -not (Test-Path -LiteralPath (Join-Path $extractDir "sdk"))) {
+              if ($sdkName -eq "native" -and -not $nativeRoot) {
                 throw "Agora Native SDK is missing lib/sdk after extraction"
               }
             }
