@@ -185,4 +185,9 @@ class BestieApi {
     final r = await dio.post(path, data: body);
     return r.data as Map<String, dynamic>;
   }
+
+  Future<Map<String, dynamic>> patch(String path, {Object? body}) async {
+    final r = await dio.patch(path, data: body);
+    return r.data as Map<String, dynamic>;
+  }
 }

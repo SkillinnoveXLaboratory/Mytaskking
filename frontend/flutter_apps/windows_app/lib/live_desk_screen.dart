@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mytaskking_core/mytaskking_core.dart';
 
@@ -12,10 +13,13 @@ class LiveDeskScreen extends ConsumerStatefulWidget {
 }
 
 class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
-  final _computerId = TextEditingController();
-  final _computerName = TextEditingController();
+  final _connectComputerId = TextEditingController();
+  final _computerId = TextEditingController(text: 'MTK-TEST-001');
+  final _computerName = TextEditingController(text: 'My Laptop');
+  final _computerNameFocus = FocusNode();
   Timer? _refresh;
   List<Map<String, dynamic>> _sessions = [];
+  Map<String, dynamic>? _hostComputer;
   bool _busy = false;
   String? _error;
 
@@ -29,21 +33,38 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
   @override
   void dispose() {
     _refresh?.cancel();
+    _connectComputerId.dispose();
     _computerId.dispose();
     _computerName.dispose();
+    _computerNameFocus.dispose();
     super.dispose();
   }
 
   Future<void> _load() async {
     try {
-      final data = await ref.read(apiProvider).remoteControlSessions();
+      final results = await Future.wait([
+        ref.read(apiProvider).remoteControlSessions(),
+        ref.read(apiProvider).remoteComputers(),
+      ]);
+      final sessionData = results[0];
+      final computerData = results[1];
+      final computers = ((computerData['items'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((item) => item.cast<String, dynamic>())
+          .toList();
+      final host = computers.isEmpty ? null : computers.first;
       if (!mounted) return;
-      setState(
-        () => _sessions = ((data['items'] as List?) ?? const [])
+      if (host != null && !_computerNameFocus.hasFocus) {
+        _computerId.text = '${host['computerId'] ?? ''}';
+        _computerName.text = '${host['computerName'] ?? ''}';
+      }
+      setState(() {
+        _sessions = ((sessionData['items'] as List?) ?? const [])
             .whereType<Map>()
-            .map((e) => e.cast<String, dynamic>())
-            .toList(),
-      );
+            .map((item) => item.cast<String, dynamic>())
+            .toList();
+        _hostComputer = host;
+      });
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     }
@@ -62,6 +83,34 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _saveHost() {
+    final host = _hostComputer;
+    if (host == null) {
+      return _run(
+        () => ref.read(apiProvider).registerRemoteComputer(
+              computerId: _computerId.text.trim(),
+              computerName: _computerName.text.trim(),
+            ),
+      );
+    }
+    return _run(
+      () => ref.read(apiProvider).renameRemoteComputer(
+            computerRecordId: '${host['id']}',
+            computerName: _computerName.text.trim(),
+          ),
+    );
+  }
+
+  Future<void> _copyComputerId() async {
+    final id = _computerId.text.trim();
+    if (id.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: id));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Computer ID copied.')),
+    );
   }
 
   @override
@@ -101,7 +150,7 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
                       children: [
                         Expanded(
                           child: TextField(
-                            controller: _computerId,
+                            controller: _connectComputerId,
                             decoration: const InputDecoration(
                               labelText: 'Computer ID',
                               hintText: 'Example: MTK-ABCD-1234',
@@ -116,7 +165,8 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
                                     () => ref
                                         .read(apiProvider)
                                         .requestRemoteControl(
-                                          computerId: _computerId.text.trim(),
+                                          computerId:
+                                              _connectComputerId.text.trim(),
                                         ),
                                   ),
                           icon: const Icon(Icons.send),
@@ -143,27 +193,48 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
                       const Icon(Icons.computer, size: 34),
                       const SizedBox(width: 14),
                       Expanded(
-                          child: Text(
-                              'Register this Windows computer as a host.',
-                              style: theme.textTheme.titleMedium)),
+                        child: Text(
+                          _hostComputer == null
+                              ? 'Register this Windows computer as a host.'
+                              : 'This Windows computer is ready for Live Desk.',
+                          style: theme.textTheme.titleMedium,
+                        ),
+                      ),
                     ]),
                     const SizedBox(height: 14),
+                    Text('Computer ID', style: theme.textTheme.labelLarge),
+                    const SizedBox(height: 4),
+                    Row(children: [
+                      Expanded(
+                        child: SelectableText(
+                          _computerId.text,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Copy computer ID',
+                        onPressed: _copyComputerId,
+                        icon: const Icon(Icons.copy_outlined),
+                      ),
+                    ]),
+                    const SizedBox(height: 12),
                     Row(children: [
                       Expanded(
                           child: TextField(
-                              controller: _computerName,
-                              decoration: const InputDecoration(
-                                  labelText: 'Computer name'))),
+                        controller: _computerName,
+                        focusNode: _computerNameFocus,
+                        decoration: const InputDecoration(
+                          labelText: 'Computer name',
+                        ),
+                      )),
                       const SizedBox(width: 12),
                       FilledButton(
-                        onPressed: _busy
-                            ? null
-                            : () => _run(() => ref
-                                .read(apiProvider)
-                                .registerRemoteComputer(
-                                    computerId: _computerId.text.trim(),
-                                    computerName: _computerName.text.trim())),
-                        child: const Text('Register host'),
+                        onPressed: _busy ? null : _saveHost,
+                        child: Text(
+                          _hostComputer == null ? 'Register host' : 'Save name',
+                        ),
                       ),
                     ]),
                   ],

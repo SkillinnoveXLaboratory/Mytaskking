@@ -84,6 +84,7 @@ model User {
   workdayLogs     WorkdayLog[]
   workActivityClips WorkActivityClip[]
   workActivityDays WorkActivityDay[]
+  remoteComputers RemoteComputer[] @relation("RemoteComputerHost")
   announcements   Announcement[]     @relation("AnnouncementAuthor")
   adminNotesAuthored AdminNote[]       @relation("AdminNoteAuthor")
   adminNotesReviewed AdminNote[]       @relation("AdminNoteReviewer")
@@ -1175,6 +1176,49 @@ model Session {
 
   @@index([userId, status])
   @@index([userId, lastSeenAt])
+}
+
+// ---------------------------------------------------------------------------
+// LIVE DESK - persistent Windows hosts and remote-control session history
+// ---------------------------------------------------------------------------
+
+enum RemoteControlSessionStatus {
+  PENDING
+  ACTIVE
+  STOPPED
+}
+
+model RemoteComputer {
+  id           String   @id @default(cuid())
+  computerId   String
+  computerName String   @default("Windows computer")
+  hostUserId   String
+  hostUser     User     @relation("RemoteComputerHost", fields: [hostUserId], references: [id], onDelete: Cascade)
+  tenantId     String   @default("default")
+  lastSeenAt   DateTime @default(now())
+  sessions     RemoteControlSession[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([tenantId, computerId])
+  @@index([hostUserId, tenantId])
+}
+
+model RemoteControlSession {
+  id               String                     @id @default(cuid())
+  computerDbId     String
+  computer         RemoteComputer             @relation(fields: [computerDbId], references: [id], onDelete: Cascade)
+  hostUserId       String
+  controllerUserId String
+  status           RemoteControlSessionStatus @default(PENDING)
+  approvedAt       DateTime?
+  stoppedAt        DateTime?
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+
+  @@index([computerDbId, status])
+  @@index([hostUserId, createdAt])
+  @@index([controllerUserId, createdAt])
 }
 
 // ---------------------------------------------------------------------------

@@ -1,104 +1,169 @@
 'use strict';
 
-const crypto = require('node:crypto');
-
-const sessions = new Map();
-
-function publicSession(session) {
-  return {
-    id: session.id,
-    computerId: session.computerId,
-    computerName: session.computerName,
-    hostUserId: session.hostUserId,
-    controllerUserId: session.controllerUserId,
-    status: session.status,
-    createdAt: session.createdAt,
-    approvedAt: session.approvedAt || null,
-    stoppedAt: session.stoppedAt || null,
-    lastSeenAt: session.lastSeenAt,
-  };
-}
+const prisma = require('../../database/prisma');
+const { BadRequest, Conflict } = require('../../utils/errors');
 
 function idForComputer(computerId) {
   return String(computerId || '').trim().toUpperCase();
 }
 
-function registerComputer({ computerId, computerName, hostUserId, tenantId }) {
-  const id = idForComputer(computerId);
-  if (!id) throw new Error('computerId is required');
-  const existing = [...sessions.values()].find(
-    (s) => s.computerId === id && s.hostUserId === hostUserId && s.status !== 'STOPPED',
-  );
-  if (existing) {
-    existing.computerName = computerName || existing.computerName;
-    existing.lastSeenAt = new Date().toISOString();
-    return publicSession(existing);
-  }
-  const session = {
-    id: crypto.randomUUID(),
-    computerId: id,
-    computerName: computerName || 'Windows computer',
-    hostUserId,
-    tenantId: tenantId || null,
-    controllerUserId: null,
-    status: 'AVAILABLE',
-    createdAt: new Date().toISOString(),
-    lastSeenAt: new Date().toISOString(),
+function publicComputer(computer) {
+  return {
+    id: computer.id,
+    computerId: computer.computerId,
+    computerName: computer.computerName,
+    hostUserId: computer.hostUserId,
+    tenantId: computer.tenantId,
+    lastSeenAt: computer.lastSeenAt,
+    createdAt: computer.createdAt,
+    updatedAt: computer.updatedAt,
   };
-  sessions.set(session.id, session);
+}
+
+function publicSession(session) {
+  return {
+    id: session.id,
+    computerId: session.computer.computerId,
+    computerName: session.computer.computerName,
+    hostUserId: session.hostUserId,
+    controllerUserId: session.controllerUserId,
+    status: session.status,
+    createdAt: session.createdAt,
+    approvedAt: session.approvedAt,
+    stoppedAt: session.stoppedAt,
+    lastSeenAt: session.computer.lastSeenAt,
+  };
+}
+
+async function listComputers(hostUserId, tenantId) {
+  const computers = await prisma.remoteComputer.findMany({
+    where: { hostUserId, tenantId },
+    orderBy: { updatedAt: 'desc' },
+  });
+  return computers.map(publicComputer);
+}
+
+async function registerComputer({ computerId, computerName, hostUserId, tenantId }) {
+  const normalizedId = idForComputer(computerId);
+  if (!normalizedId) throw BadRequest('computerId is required');
+
+  const existing = await prisma.remoteComputer.findUnique({
+    where: { tenantId_computerId: { tenantId, computerId: normalizedId } },
+  });
+  if (existing && existing.hostUserId !== hostUserId) {
+    throw Conflict('Computer ID is already registered to another host');
+  }
+
+  const computer = await prisma.remoteComputer.upsert({
+    where: { tenantId_computerId: { tenantId, computerId: normalizedId } },
+    create: {
+      computerId: normalizedId,
+      computerName: computerName || 'Windows computer',
+      hostUserId,
+      tenantId,
+    },
+    update: {
+      computerName: computerName || undefined,
+      lastSeenAt: new Date(),
+    },
+  });
+  return publicComputer(computer);
+}
+
+async function renameComputer({ id, computerName, hostUserId, tenantId }) {
+  const result = await prisma.remoteComputer.updateMany({
+    where: { id, hostUserId, tenantId },
+    data: { computerName, lastSeenAt: new Date() },
+  });
+  if (result.count === 0) return null;
+  const computer = await prisma.remoteComputer.findUnique({ where: { id } });
+  return publicComputer(computer);
+}
+
+async function requestSession({ computerId, controllerUserId, tenantId }) {
+  const normalizedId = idForComputer(computerId);
+  return prisma.$transaction(async (tx) => {
+    const computer = await tx.remoteComputer.findUnique({
+      where: { tenantId_computerId: { tenantId, computerId: normalizedId } },
+    });
+    if (!computer) return null;
+    if (computer.hostUserId === controllerUserId) {
+      throw BadRequest('You cannot control your own computer');
+    }
+
+    const existing = await tx.remoteControlSession.findFirst({
+      where: {
+        computerDbId: computer.id,
+        status: { in: ['PENDING', 'ACTIVE'] },
+      },
+    });
+    if (existing) throw Conflict('Computer already has a remote-control session');
+
+    const session = await tx.remoteControlSession.create({
+      data: {
+        computerDbId: computer.id,
+        hostUserId: computer.hostUserId,
+        controllerUserId,
+      },
+      include: { computer: true },
+    });
+    await tx.remoteComputer.update({
+      where: { id: computer.id },
+      data: { lastSeenAt: new Date() },
+    });
+    return publicSession(session);
+  });
+}
+
+async function approve(id, hostUserId) {
+  const result = await prisma.remoteControlSession.updateMany({
+    where: { id, hostUserId, status: 'PENDING' },
+    data: { status: 'ACTIVE', approvedAt: new Date() },
+  });
+  if (result.count === 0) return null;
+  const session = await prisma.remoteControlSession.findUnique({
+    where: { id },
+    include: { computer: true },
+  });
   return publicSession(session);
 }
 
-function findComputer(computerId, tenantId) {
-  const id = idForComputer(computerId);
-  return [...sessions.values()].find(
-    (s) => s.computerId === id && (!tenantId || !s.tenantId || s.tenantId === tenantId) && s.status !== 'STOPPED',
-  );
-}
-
-function requestSession({ computerId, controllerUserId, tenantId }) {
-  const host = findComputer(computerId, tenantId);
-  if (!host) return null;
-  if (host.hostUserId === controllerUserId) throw new Error('You cannot control your own computer');
-  if (host.status === 'PENDING' || host.status === 'ACTIVE') throw new Error('Computer already has a remote-control session');
-  host.controllerUserId = controllerUserId;
-  host.status = 'PENDING';
-  host.lastSeenAt = new Date().toISOString();
-  return publicSession(host);
-}
-
-function approve(id, hostUserId) {
-  const session = sessions.get(id);
-  if (!session || session.hostUserId !== hostUserId || session.status !== 'PENDING') return null;
-  session.status = 'ACTIVE';
-  session.approvedAt = new Date().toISOString();
-  session.lastSeenAt = session.approvedAt;
+async function stop(id, userId) {
+  const result = await prisma.remoteControlSession.updateMany({
+    where: {
+      id,
+      status: { in: ['PENDING', 'ACTIVE'] },
+      OR: [{ hostUserId: userId }, { controllerUserId: userId }],
+    },
+    data: { status: 'STOPPED', stoppedAt: new Date() },
+  });
+  if (result.count === 0) return null;
+  const session = await prisma.remoteControlSession.findUnique({
+    where: { id },
+    include: { computer: true },
+  });
   return publicSession(session);
 }
 
-function stop(id, userId) {
-  const session = sessions.get(id);
-  if (!session || (session.hostUserId !== userId && session.controllerUserId !== userId)) return null;
-  session.status = 'STOPPED';
-  session.stoppedAt = new Date().toISOString();
-  return publicSession(session);
+async function listForUser(userId, tenantId) {
+  const sessions = await prisma.remoteControlSession.findMany({
+    where: {
+      computer: { is: { tenantId } },
+      OR: [{ hostUserId: userId }, { controllerUserId: userId }],
+    },
+    include: { computer: true },
+    orderBy: { createdAt: 'desc' },
+    take: 50,
+  });
+  return sessions.map(publicSession);
 }
 
-function get(id) {
-  const session = sessions.get(id);
-  return session ? publicSession(session) : null;
-}
-
-function canUse(id, userId, status = 'ACTIVE') {
-  const session = sessions.get(id);
-  return !!session && session.status === status &&
-    (session.hostUserId === userId || session.controllerUserId === userId);
-}
-
-function listForUser(userId, tenantId) {
-  return [...sessions.values()]
-    .filter((s) => s.tenantId === tenantId && (s.hostUserId === userId || s.controllerUserId === userId) && s.status !== 'STOPPED')
-    .map(publicSession);
-}
-
-module.exports = { registerComputer, requestSession, approve, stop, get, canUse, listForUser };
+module.exports = {
+  listComputers,
+  registerComputer,
+  renameComputer,
+  requestSession,
+  approve,
+  stop,
+  listForUser,
+};
