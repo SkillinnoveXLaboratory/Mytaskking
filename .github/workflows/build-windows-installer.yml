@@ -53,17 +53,26 @@ jobs:
               $sdkName = $match.Groups[1].Value.ToLowerInvariant()
               $sdkUrl = $match.Groups[2].Value
               $sdkDir = Join-Path $pluginTarget "windows/third_party/$sdkName"
+              # Agora's CMake script searches inside <sdk>/lib after extraction.
+              $extractDir = Join-Path $sdkDir "lib"
               $sdkZip = Join-Path $sdkDir ([System.IO.Path]::GetFileName($sdkUrl))
               New-Item -ItemType Directory -Path $sdkDir -Force | Out-Null
+              New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
               if (-not (Test-Path -LiteralPath $sdkZip)) {
                 Invoke-WebRequest -Uri $sdkUrl -OutFile $sdkZip
               }
-              Push-Location $sdkDir
+              Push-Location $extractDir
               & cmake -E tar xzf $sdkZip
               $extractExit = $LASTEXITCODE
               Pop-Location
               if ($extractExit -ne 0) {
                 throw "Failed to extract Agora $sdkName SDK"
+              }
+              if ($sdkName -eq "iris" -and -not (Test-Path -LiteralPath (Join-Path $extractDir "x64/include"))) {
+                throw "Agora Iris SDK is missing lib/x64/include after extraction"
+              }
+              if ($sdkName -eq "native" -and -not (Test-Path -LiteralPath (Join-Path $extractDir "sdk"))) {
+                throw "Agora Native SDK is missing lib/sdk after extraction"
               }
             }
             New-Item -ItemType File -Path (Join-Path $pluginTarget "windows/.plugin_dev") -Force | Out-Null
