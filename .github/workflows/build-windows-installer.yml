@@ -1,10 +1,9 @@
 name: Build Windows Installer
 
 on:
+  # Windows builds are paused while the Linux installer is being validated.
+  # Keep manual dispatch available for an intentional Windows release.
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 jobs:
   build-windows-installer:
