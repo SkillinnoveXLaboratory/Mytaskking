@@ -42,11 +42,31 @@ jobs:
               $pluginTarget = Join-Path (Split-Path $pluginLink) $pluginTarget
             }
             $pluginTarget = (Resolve-Path -LiteralPath $pluginTarget).Path
-            cmd /c rmdir "$pluginLink"
-            if (Test-Path -LiteralPath $pluginLink) {
-              throw "Could not remove Agora plugin link: $pluginLink"
+
+            $cmakeFile = Join-Path $pluginTarget "windows/cmake/DownloadSDK.cmake"
+            $cmakeText = Get-Content -LiteralPath $cmakeFile -Raw
+            $sdkMatches = [regex]::Matches(
+              $cmakeText,
+              'set\((IRIS|NATIVE)_SDK_DOWNLOAD_URL "([^"]+)"\)'
+            )
+            foreach ($match in $sdkMatches) {
+              $sdkName = $match.Groups[1].Value.ToLowerInvariant()
+              $sdkUrl = $match.Groups[2].Value
+              $sdkDir = Join-Path $pluginTarget "windows/third_party/$sdkName"
+              $sdkZip = Join-Path $sdkDir ([System.IO.Path]::GetFileName($sdkUrl))
+              New-Item -ItemType Directory -Path $sdkDir -Force | Out-Null
+              if (-not (Test-Path -LiteralPath $sdkZip)) {
+                Invoke-WebRequest -Uri $sdkUrl -OutFile $sdkZip
+              }
+              Push-Location $sdkDir
+              & cmake -E tar xzf $sdkZip
+              $extractExit = $LASTEXITCODE
+              Pop-Location
+              if ($extractExit -ne 0) {
+                throw "Failed to extract Agora $sdkName SDK"
+              }
             }
-            Copy-Item -LiteralPath $pluginTarget -Destination $pluginLink -Recurse -Force
+            New-Item -ItemType File -Path (Join-Path $pluginTarget "windows/.plugin_dev") -Force | Out-Null
           }
 
       - name: Build installer
