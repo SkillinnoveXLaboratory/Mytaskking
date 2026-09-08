@@ -1,0 +1,52 @@
+/// Public re-exports of every feature screen, so the desktop apps can pull
+/// them in as `import 'package:mytaskking_mobile/screens.dart';` and reuse the
+/// same widgets without copy-paste.
+library mytaskking_mobile.screens;
+
+export 'chat_typing.dart';
+export 'desktop_chat_screen.dart';
+export 'screens/login_screen.dart';
+export 'screens/shell_screen.dart';
+export 'screens/dashboard_screen.dart';
+export 'screens/chat_list_screen.dart';
+export 'screens/chat_detail_screen.dart';
+export 'screens/tasks_screen.dart';
+export 'screens/task_actions_sheet.dart';
+export 'screens/reports_screen.dart';
+export 'screens/recordings_screen.dart';
+export 'screens/deleted_chats_screen.dart';
+export 'screens/leaderboard_card.dart';
+export 'screens/meetings_screen.dart';
+export 'screens/notifications_screen.dart';
+export 'screens/profile_screen.dart';
+export 'screens/search_screen.dart';
+export 'screens/call_screen.dart';
+export 'screens/employees_screen.dart';
+export 'screens/clients_screen.dart';
+export 'screens/calls_screen.dart';
+export 'screens/calendar_screen.dart';
+export 'screens/announcements_screen.dart';
+export 'screens/saved_screen.dart';
+export 'screens/sessions_screen.dart';
+export 'screens/login_activity_screen.dart';
+export 'screens/work_activity_screen.dart';
+export 'screens/remote_control_screen.dart';
+export 'screens/ai_review_screen.dart';
+export 'screens/telecaller_screen.dart';
+export 'screens/settings_screen.dart';
+export 'screens/attendance_screen.dart';
+export 'screens/task_detail_screen.dart';
+export 'screens/marketing/field_dashboard_screen.dart';
+export 'screens/marketing/field_manager_screen.dart';
+export 'screens/marketing/field_hr_screen.dart';
+export 'screens/marketing/marketing_export_screen.dart';
+export 'screens/marketing/field_settings_section.dart';
+export 'screens/marketing/marketing_order_detail_screen.dart';
+export 'screens/marketing/marketing_orders_screen.dart';
+export 'screens/marketing/marketing_outlet_visit_screen.dart';
+export 'screens/marketing/marketing_outlets_screen.dart';
+export 'screens/marketing/marketing_catalog_screen.dart';
+export 'screens/marketing/field_my_visits_screen.dart';
+export 'screens/marketing/field_gps_screen.dart';
+export 'screens/marketing/marketing_shop_search_screen.dart';
+export 'state.dart';

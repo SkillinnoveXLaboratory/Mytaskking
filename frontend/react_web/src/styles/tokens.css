@@ -1,0 +1,207 @@
+/*
+ * MyTaskKing — design tokens
+ * Premium, Lark-grade enterprise feel.
+ * Shared with Flutter via mirrored constants in flutter_apps/shared_design_system.
+ */
+
+:root {
+  /* ---------- color: neutral surface ---------- */
+  --c-bg:           #eef4ff;
+  --c-bg-soft:      #e4ecfb;
+  --c-bg-tint:      #f5f9ff;
+  --c-surface:      rgba(255,255,255,0.92);
+  --c-surface-1:    rgba(250,252,255,0.94);
+  --c-surface-2:    #edf3ff;
+  --c-surface-3:    #dfe8f8;
+  --c-border:       #d8e2f4;
+  --c-border-soft:  #e8eef8;
+  --c-border-strong:#b9c8de;
+  --c-overlay:      rgba(15, 18, 22, 0.48);
+
+  /* ---------- color: text ---------- */
+  --c-text:         #0b0e13;
+  --c-text-soft:    #424a5b;
+  --c-text-muted:   #828a9b;
+  --c-text-faint:   #b4bac6;
+  --c-text-invert:  #ffffff;
+
+  /* ---------- color: brand (Lark-ish blue family) ---------- */
+  --c-brand-50:     #eaf2ff;
+  --c-brand-100:    #d8e6ff;
+  --c-brand-200:    #abc7ff;
+  --c-brand-300:    #78a4ff;
+  --c-brand-400:    #397bf6;
+  --c-brand:        #0c4fbf;
+  --c-brand-soft:   #dceaff;
+  --c-brand-strong: #063d96;
+  --c-brand-deep:   #082c6c;
+  --c-accent:       #09a7ff;
+  --c-accent-soft:  #d9f2ff;
+
+  /* gradient stops, reused by brand surfaces and CTAs */
+  --g-brand:        linear-gradient(135deg, #072b78 0%, #0c4fbf 52%, #09a7ff 100%);
+  --g-brand-soft:   linear-gradient(135deg, rgba(7,43,120,.16), rgba(12,79,191,.12) 55%, rgba(9,167,255,.10));
+  --g-aurora:       radial-gradient(120% 80% at 0% 0%, rgba(7,43,120,.22), transparent 60%),
+                    radial-gradient(120% 80% at 100% 0%, rgba(9,167,255,.20), transparent 60%),
+                    radial-gradient(140% 100% at 50% 120%, rgba(20,64,140,.12), transparent 60%);
+
+  /* ---------- color: status ---------- */
+  --c-success:        #10b981;
+  --c-success-soft:   #dcfce7;
+  --c-warning:        #f59e0b;
+  --c-warning-soft:   #fef3c7;
+  --c-danger:         #ef4444;
+  --c-danger-soft:    #fee2e2;
+  --c-info:           #0ea5e9;
+  --c-info-soft:      #e0f2fe;
+
+  /* clients always render in this red regardless of theme */
+  --c-client:       #e0254a;
+  --c-client-soft:  #fde7ec;
+
+  /* leaderboard medals — universal regardless of theme */
+  --c-medal-gold:    #facc15;
+  --c-medal-silver:  #cbd5e1;
+  --c-medal-bronze:  #d97706;
+  --c-streak-fire:   #b45309;
+
+  /* ---------- elevation — soft, layered, premium ---------- */
+  --sh-1:    0 1px 2px rgba(15, 18, 22, 0.04), 0 1px 1px rgba(15, 18, 22, 0.025);
+  --sh-2:    0 2px 4px rgba(8, 36, 85, 0.05), 0 10px 24px rgba(8, 36, 85, 0.08);
+  --sh-3:    0 6px 12px rgba(8, 36, 85, 0.08), 0 20px 52px rgba(8, 36, 85, 0.13);
+  --sh-4:    0 10px 20px rgba(8, 36, 85, 0.10), 0 34px 78px rgba(8, 36, 85, 0.18);
+  --sh-pop:  0 24px 70px rgba(8, 36, 85, 0.22), 0 6px 12px rgba(8, 36, 85, 0.10);
+  --sh-hi:   0 42px 110px rgba(8, 36, 85, 0.32);
+  --sh-inset:inset 0 0 0 1px rgba(15, 18, 22, 0.04);
+  --sh-ring: 0 0 0 4px rgba(12, 79, 191, 0.20);
+  --sh-ring-danger: 0 0 0 4px rgba(239, 68, 68, 0.18);
+  --sh-glow-brand: 0 16px 52px rgba(12, 79, 191, 0.34);
+
+  /* ---------- radii ---------- */
+  --r-xs:   6px;
+  --r-sm:   10px;
+  --r-md:   14px;
+  --r-lg:   18px;
+  --r-xl:   24px;
+  --r-2xl:  32px;
+  --r-pill: 999px;
+
+  /* ---------- spacing scale ---------- */
+  --s-0:  4px;
+  --s-1:  8px;
+  --s-2:  12px;
+  --s-3:  16px;
+  --s-4:  20px;
+  --s-5:  24px;
+  --s-6:  32px;
+  --s-7:  40px;
+  --s-8:  56px;
+  --s-9:  72px;
+
+  /* ---------- type ---------- */
+  --font-sans: "Inter", "SF Pro Text", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-display: "Inter", "SF Pro Display", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-features: "cv11", "ss01", "ss03", "ss04", "cv02", "cv03", "cv04";
+
+  --fs-xs:    12px;
+  --fs-sm:    13px;
+  --fs-base:  14px;
+  --fs-md:    15px;
+  --fs-lg:    17px;
+  --fs-xl:    20px;
+  --fs-2xl:   24px;
+  --fs-3xl:   30px;
+  --fs-4xl:   36px;
+  --fs-5xl:   44px;
+
+  --fw-regular:  400;
+  --fw-medium:   500;
+  --fw-semibold: 600;
+  --fw-bold:     700;
+  --fw-black:    800;
+
+  --lh-tight:  1.22;
+  --lh-snug:   1.34;
+  --lh-normal: 1.46;
+  --lh-loose:  1.62;
+
+  --ls-tight:  -0.018em;
+  --ls-snug:   -0.012em;
+  --ls-normal: -0.005em;
+  --ls-wide:    0.04em;
+  --ls-eyebrow: 0.10em;
+
+  /* ---------- motion ---------- */
+  --ease:           cubic-bezier(0.22, 0.61, 0.36, 1);     /* default smooth */
+  --ease-out:       cubic-bezier(0.16, 1, 0.3, 1);         /* premium "soft land" */
+  --ease-in:        cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out:    cubic-bezier(0.83, 0, 0.17, 1);
+  --ease-spring:    cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-snap:      cubic-bezier(0.5, 0, 0.2, 1);
+  --ease-emphasis:  cubic-bezier(0.2, 0, 0, 1);
+
+  --dur-instant: 80ms;
+  --dur-fast:    140ms;
+  --dur:         220ms;
+  --dur-medium:  320ms;
+  --dur-slow:    420ms;
+  --dur-xslow:   620ms;
+
+  /* ---------- layout ---------- */
+  --sidebar-w: 264px;
+  --sidebar-w-collapsed: 64px;
+  --topbar-h: 56px;
+  --content-max: 1440px;
+  --safe-pad: clamp(16px, 2.2vw, 28px);
+
+  /* ---------- z-index scale ---------- */
+  --z-base: 1;
+  --z-sticky: 20;
+  --z-overlay: 50;
+  --z-modal: 80;
+  --z-toast: 100;
+  --z-tooltip: 120;
+}
+
+/* Dark theme — applied by .theme-dark on <html> */
+.theme-dark {
+  --c-bg:           #050b18;
+  --c-bg-soft:      #071225;
+  --c-bg-tint:      #0a1730;
+  --c-surface:      rgba(9, 18, 36, 0.92);
+  --c-surface-1:    rgba(13, 26, 50, 0.94);
+  --c-surface-2:    #102040;
+  --c-surface-3:    #15294f;
+  --c-border:       #1d3562;
+  --c-border-soft:  #132744;
+  --c-border-strong:#2c4a7d;
+  --c-overlay:      rgba(0, 0, 0, 0.56);
+
+  --c-text:         #f0f3f8;
+  --c-text-soft:    #c4cad8;
+  --c-text-muted:   #8c95a6;
+  --c-text-faint:   #5f6675;
+
+  --c-brand-50:     #0a1c41;
+  --c-brand-100:    #0d275a;
+  --c-brand-200:    #103573;
+  --c-brand-soft:   #0d2858;
+  --c-accent-soft:  #073954;
+  --c-client-soft:  #3a121e;
+
+  --c-success-soft: #0e2e23;
+  --c-warning-soft: #3a2a0c;
+  --c-danger-soft:  #3a1414;
+  --c-info-soft:    #0c2a3a;
+
+  --sh-1:    0 1px 2px rgba(0, 0, 0, 0.45);
+  --sh-2:    0 4px 12px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --sh-3:    0 12px 32px rgba(0, 0, 0, 0.55), 0 4px 10px rgba(0, 0, 0, 0.35);
+  --sh-4:    0 20px 50px rgba(0, 0, 0, 0.65), 0 8px 20px rgba(0, 0, 0, 0.4);
+  --sh-pop:  0 28px 72px rgba(0, 0, 0, 0.7);
+  --sh-hi:   0 40px 110px rgba(0, 0, 0, 0.75);
+  --sh-inset:inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --sh-ring: 0 0 0 4px rgba(91, 134, 255, 0.30);
+  --sh-glow-brand: 0 16px 48px rgba(91, 134, 255, 0.40);
+}

@@ -1,0 +1,507 @@
+'use strict';
+
+const prisma = require('../../database/prisma');
+const { NotFound, Forbidden, BadRequest } = require('../../utils/errors');
+const cache = require('../../services/cache');
+const tenant = require('../../services/tenant');
+const { userIsMentionedInBody } = require('../../utils/mentions');
+
+const memberUserSelect = {
+  id: true,
+  userId: true,
+  name: true,
+  role: true,
+  customTitle: true,
+  avatarUrl: true,
+  isClient: true,
+  status: true,
+  lastSeenAt: true,
+};
+
+async function withOnlineMembers(channel, viewer) {
+  if (!channel?.members?.length) return channel;
+  const viewerCanSeeAdminPresence = ['ADMIN', 'SUPER_ADMIN'].includes(viewer?.role);
+  const members = await Promise.all(
+    channel.members.map(async (member) => {
+      if (!member.user) return member;
+      const online = await cache.get(`presence:online:${member.user.id}`).catch(() => null);
+      const hidePresence =
+        !viewerCanSeeAdminPresence && ['ADMIN', 'SUPER_ADMIN'].includes(member.user.role);
+      return {
+        ...member,
+        user: {
+          ...member.user,
+          online: hidePresence ? false : online === true,
+          lastSeenAt: hidePresence ? null : member.user.lastSeenAt,
+        },
+      };
+    })
+  );
+  return { ...channel, members };
+}
+
+async function ensureMember(channelId, userId) {
+  const m = await prisma.channelMember.findUnique({
+    where: { channelId_userId: { channelId, userId } },
+  });
+  if (!m) throw Forbidden('Not a member of this channel');
+  return m;
+}
+
+/** Member, or org admin within the same tenant. */
+async function assertChannelAccess(channelId, user) {
+  const channel = await prisma.channel.findUnique({
+    where: { id: channelId },
+    select: { id: true, tenantId: true, kind: true },
+  });
+  if (!channel) throw NotFound('Channel not found');
+  tenant.assertSameTenant(user, channel.tenantId);
+  const member = await prisma.channelMember.findUnique({
+    where: { channelId_userId: { channelId, userId: user.id } },
+  });
+  if (!member && !tenant.canAdministerTenant(user, channel.tenantId)) {
+    throw Forbidden('Not a member of this channel');
+  }
+  if (user.isClient && channel.kind !== 'CLIENT') {
+    throw Forbidden('Clients can only access client channels');
+  }
+  return channel;
+}
+
+async function listForUser(user) {
+  // Clients only see channels they're explicitly added to
+  const channels = await prisma.channel.findMany({
+    where: {
+      archived: false,
+      members: { some: { userId: user.id } },
+      ...(tenant.MULTI_TENANT ? { tenantId: tenant.userTenantId(user) } : {}),
+      ...(user.isClient ? { kind: 'CLIENT' } : {}),
+    },
+    include: {
+      members: { include: { user: { select: memberUserSelect } } },
+      _count: { select: { messages: true } },
+      // Most-recent non-deleted message per channel — the Flutter chat list
+      // uses this for the WhatsApp-style preview line ("📷 Photo", body
+      // text, "🎙️ Voice note", etc).
+      messages: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        select: {
+          id: true,
+          body: true,
+          kind: true,
+          createdAt: true,
+          authorId: true,
+          author: { select: { id: true, name: true, avatarUrl: true, isClient: true } },
+        },
+      },
+    },
+    orderBy: [{ pinned: 'desc' }, { updatedAt: 'desc' }],
+  });
+
+  return Promise.all(
+    channels.map(async (channel) => {
+      const myMember = channel.members.find((member) => member.userId === user.id);
+      const since = myMember?.lastReadAt || myMember?.joinedAt || new Date(0);
+      const unreadWhere = {
+        channelId: channel.id,
+        deletedAt: null,
+        authorId: { not: user.id },
+        createdAt: { gt: since },
+      };
+      const unreadCount = await prisma.message.count({ where: unreadWhere });
+      let unreadMentionCount = 0;
+      if (channel.kind !== 'DM') {
+        const unreadWithAt = await prisma.message.findMany({
+          where: { ...unreadWhere, body: { contains: '@' } },
+          select: { body: true, authorId: true },
+          take: 200,
+        });
+        for (const msg of unreadWithAt) {
+          if (userIsMentionedInBody({
+            body: msg.body,
+            user,
+            members: channel.members,
+            authorId: msg.authorId,
+          })) {
+            unreadMentionCount += 1;
+          }
+        }
+      }
+      const { messages, ...rest } = channel;
+      return withOnlineMembers({
+        ...rest,
+        lastMessage: messages[0] || null,
+        unreadCount,
+        unreadMentionCount,
+      }, user);
+    })
+  ).then((items) =>
+    items.filter((channel) => {
+      if (channel.kind !== 'DM') return true;
+      const others = channel.members.filter((m) => m.userId !== user.id && m.user);
+      return others.some((m) => {
+        const name = (m.user.name || '').trim();
+        const loginId = (m.user.userId || '').trim();
+        return name.length > 0 || loginId.length > 0;
+      });
+    })
+  );
+}
+
+async function directoryForUser(user, q = '') {
+  const base = tenant.tenantClause(user, {
+    status: 'ACTIVE',
+    ...(user.isClient ? { isClient: false } : {}),
+    ...(q
+      ? {
+          OR: [
+            { name: { contains: q, mode: 'insensitive' } },
+            { userId: { contains: q, mode: 'insensitive' } },
+            { customTitle: { contains: q, mode: 'insensitive' } },
+          ],
+        }
+      : {}),
+  });
+
+  return prisma.user.findMany({
+    where: base,
+    orderBy: { name: 'asc' },
+    take: 30,
+    select: {
+      id: true,
+      userId: true,
+      name: true,
+      role: true,
+      customTitle: true,
+      avatarUrl: true,
+      isClient: true,
+      status: true,
+    },
+  });
+}
+
+async function create(input, creator) {
+  if (creator.isClient) {
+    throw Forbidden('Clients cannot create channels');
+  }
+
+  if (input.kind === 'DM') {
+    if (!input.memberIds || input.memberIds.length !== 1) {
+      throw BadRequest('DM requires exactly one other member');
+    }
+
+    const otherId = input.memberIds[0];
+    const existingDm = await prisma.channel.findFirst({
+      where: {
+        kind: 'DM',
+        archived: false,
+        AND: [
+          { members: { some: { userId: creator.id } } },
+          { members: { some: { userId: otherId } } },
+          { members: { none: { userId: { notIn: [creator.id, otherId] } } } },
+        ],
+      },
+      include: { members: true },
+    });
+
+    if (existingDm) return existingDm;
+  }
+
+  const requestedIds = Array.from(new Set(input.memberIds || []));
+  let memberIds = Array.from(new Set([creator.id, ...requestedIds]));
+
+  if (input.kind === 'CLIENT') {
+    if (!['SUPER_ADMIN', 'ADMIN'].includes(creator.role)) {
+      throw Forbidden('Only admins can create client channels');
+    }
+
+    const selectedUsers = await prisma.user.findMany({
+      where: tenant.tenantClause(creator, { id: { in: requestedIds }, status: 'ACTIVE' }),
+      select: { id: true, isClient: true },
+    });
+    if (!selectedUsers.some((user) => user.isClient)) {
+      throw BadRequest('Client channel requires at least one client');
+    }
+
+    const clientIds = selectedUsers.filter((user) => user.isClient).map((user) => user.id);
+    if (clientIds.length === 1) {
+      const existingClientChannel = await prisma.channel.findFirst({
+        where: {
+          archived: false,
+          tenantId: creator.tenantId,
+          OR: [{ kind: 'CLIENT' }, { isClientChannel: true }],
+          members: { some: { userId: clientIds[0] } },
+        },
+        include: { members: true },
+        orderBy: { updatedAt: 'desc' },
+      });
+      if (existingClientChannel) return existingClientChannel;
+    }
+
+    const internalUsers = await prisma.user.findMany({
+      where: {
+        isClient: false,
+        status: 'ACTIVE',
+        tenantId: creator.tenantId,
+      },
+      select: { id: true },
+    });
+    memberIds = Array.from(new Set([
+      creator.id,
+      ...selectedUsers.map((user) => user.id),
+      ...internalUsers.map((user) => user.id),
+    ]));
+  }
+
+  const members = await prisma.user.findMany({
+    where: {
+      id: { in: memberIds },
+      tenantId: creator.tenantId,
+    },
+  });
+  if (members.length !== memberIds.length) {
+    throw BadRequest('All members must belong to your organisation');
+  }
+  const hasClient = members.some((m) => m.isClient);
+
+  if (hasClient && input.kind !== 'CLIENT') {
+    throw BadRequest('Channels with clients must use CLIENT kind');
+  }
+
+  const channel = await prisma.channel.create({
+    data: {
+      name: input.name,
+      description: input.description || null,
+      iconUrl: input.iconUrl || null,
+      kind: input.kind,
+      visibility: input.visibility || 'PRIVATE',
+      isClientChannel: hasClient || input.kind === 'CLIENT',
+      createdById: creator.id,
+      tenantId: creator.tenantId,
+      members: {
+        create: members.map((m) => ({
+          userId: m.id,
+          role: m.id === creator.id ? 'owner' : 'member',
+        })),
+      },
+    },
+    include: { members: true },
+  });
+
+  return channel;
+}
+
+async function getById(id, user) {
+  const channel = await prisma.channel.findUnique({
+    where: { id },
+    include: {
+      members: { include: { user: { select: memberUserSelect } } },
+    },
+  });
+  if (!channel) throw NotFound('Channel not found');
+  tenant.assertSameTenant(user, channel.tenantId);
+  const isMember = channel.members.some((m) => m.userId === user.id);
+  if (!isMember && !tenant.canAdministerTenant(user, channel.tenantId)) {
+    throw Forbidden('Not a member of this channel');
+  }
+  return withOnlineMembers(channel, user);
+}
+
+async function addMembers(channelId, memberIds, actor) {
+  const channel = await prisma.channel.findUnique({ where: { id: channelId }, include: { members: true } });
+  if (!channel) throw NotFound('Channel not found');
+  tenant.assertSameTenant(actor, channel.tenantId);
+
+  if (!canManageGroupMembers(channel, actor)) throw Forbidden('Not allowed');
+
+  const newMembers = await prisma.user.findMany({
+    where: tenant.tenantClause(actor, { id: { in: memberIds } }),
+  });
+  const includesClient = newMembers.some((u) => u.isClient);
+
+  await prisma.$transaction([
+    ...newMembers.map((u) =>
+      prisma.channelMember.upsert({
+        where: { channelId_userId: { channelId, userId: u.id } },
+        update: {},
+        create: { channelId, userId: u.id, role: 'member' },
+      })
+    ),
+    ...(includesClient && !channel.isClientChannel
+      ? [prisma.channel.update({ where: { id: channelId }, data: { isClientChannel: true } })]
+      : []),
+  ]);
+
+  return getById(channelId, actor);
+}
+
+function canManageGroupMembers(channel, actor) {
+  if (!channel || !actor) return false;
+  if (channel.createdById === actor.id) return true;
+  if (tenant.canAdministerTenant(actor, channel.tenantId)) return true;
+  return (channel.members || []).some((m) => {
+    if (m.userId !== actor.id) return false;
+    const role = String(m.memberRole || m.role || '').toUpperCase();
+    return role === 'OWNER' || role === 'ADMIN' || m.role === 'owner' || m.role === 'admin';
+  });
+}
+
+function isGroupOwnerOrAdmin(channel, userId) {
+  if (!channel || !userId) return false;
+  if (channel.createdById === userId) return true;
+  return (channel.members || []).some((m) => {
+    if (m.userId !== userId) return false;
+    const role = String(m.memberRole || m.role || '').toUpperCase();
+    return role === 'OWNER' || role === 'ADMIN' || m.role === 'owner' || m.role === 'admin';
+  });
+}
+
+async function removeMember(channelId, memberId, actor, options = {}) {
+  const { nextOwnerId } = options;
+  const channel = await prisma.channel.findUnique({
+    where: { id: channelId },
+    include: { members: true },
+  });
+  if (!channel) throw NotFound('Channel not found');
+  tenant.assertSameTenant(actor, channel.tenantId);
+  const selfRemove = memberId === actor.id;
+  if (!selfRemove && !canManageGroupMembers(channel, actor)) {
+    throw Forbidden('Only the group creator or admins can remove members');
+  }
+  if (channel.kind === 'DM') throw BadRequest('Cannot remove members from a DM');
+
+  const otherMembers = channel.members.filter((m) => m.userId !== memberId);
+
+  if (selfRemove && isGroupOwnerOrAdmin(channel, actor.id) && otherMembers.length > 0) {
+    if (!nextOwnerId) {
+      throw BadRequest('Select the next group admin before leaving');
+    }
+    if (!otherMembers.some((m) => m.userId === nextOwnerId)) {
+      throw BadRequest('Next admin must be a current group member');
+    }
+    await prisma.$transaction([
+      prisma.channelMember.update({
+        where: { channelId_userId: { channelId, userId: nextOwnerId } },
+        data: { memberRole: 'OWNER', role: 'owner' },
+      }),
+      prisma.channel.update({
+        where: { id: channelId },
+        data: { createdById: nextOwnerId },
+      }),
+      prisma.channelMember.delete({
+        where: { channelId_userId: { channelId, userId: memberId } },
+      }),
+    ]);
+    return { left: true, channelId, newOwnerId: nextOwnerId };
+  }
+
+  await prisma.channelMember.delete({
+    where: { channelId_userId: { channelId, userId: memberId } },
+  }).catch(() => {});
+
+  if (selfRemove && otherMembers.length === 0) {
+    await prisma.channel.update({
+      where: { id: channelId },
+      data: { archived: true },
+    });
+    return { left: true, channelId, groupEnded: true };
+  }
+
+  if (selfRemove) return { left: true, channelId };
+  return getById(channelId, actor);
+}
+
+async function deleteGroup(channelId, actor) {
+  const channel = await prisma.channel.findUnique({
+    where: { id: channelId },
+    include: { members: true },
+  });
+  if (!channel) throw NotFound('Channel not found');
+  tenant.assertSameTenant(actor, channel.tenantId);
+  if (channel.kind === 'DM') throw BadRequest('Direct chats cannot be deleted as a group');
+  if (!canManageGroupMembers(channel, actor)) {
+    throw Forbidden('Only the group creator or admins can delete this group');
+  }
+  return prisma.channel.update({
+    where: { id: channelId },
+    data: { archived: true },
+  });
+}
+
+async function pin(id, value) {
+  return prisma.channel.update({ where: { id }, data: { pinned: !!value } });
+}
+
+async function archive(id, value) {
+  return prisma.channel.update({ where: { id }, data: { archived: !!value } });
+}
+
+async function setPolicy(id, policy, actor) {
+  const channel = await prisma.channel.findUnique({ where: { id }, select: { tenantId: true } });
+  if (!channel) throw NotFound('Channel not found');
+  tenant.assertSameTenant(actor, channel.tenantId);
+  if (!tenant.canAdministerTenant(actor, channel.tenantId)) {
+    const m = await prisma.channelMember.findUnique({
+      where: { channelId_userId: { channelId: id, userId: actor.id } },
+    });
+    if (!m || !['OWNER', 'ADMIN'].includes(m.memberRole)) throw Forbidden();
+  }
+  return prisma.channel.update({ where: { id }, data: policy });
+}
+
+async function setMemberPermissions(channelId, userId, perms, actor) {
+  const channel = await prisma.channel.findUnique({ where: { id: channelId }, select: { tenantId: true } });
+  if (!channel) throw NotFound('Channel not found');
+  tenant.assertSameTenant(actor, channel.tenantId);
+  if (!tenant.canAdministerTenant(actor, channel.tenantId)) {
+    const m = await prisma.channelMember.findUnique({
+      where: { channelId_userId: { channelId, userId: actor.id } },
+    });
+    if (!m || !['OWNER', 'ADMIN'].includes(m.memberRole)) throw Forbidden();
+  }
+  return prisma.channelMember.update({
+    where: { channelId_userId: { channelId, userId } },
+    data: perms,
+  });
+}
+
+async function updateChannel(id, input, user) {
+  const channel = await prisma.channel.findUnique({
+    where: { id },
+    select: { id: true, createdById: true, tenantId: true },
+  });
+  if (!channel) throw NotFound('Channel not found');
+  tenant.assertSameTenant(user, channel.tenantId);
+  const member = await ensureMember(id, user.id);
+  const isAdmin = ['OWNER', 'ADMIN', 'MODERATOR'].includes(member.memberRole) ||
+      member.role === 'owner' ||
+      channel.createdById === user.id ||
+      tenant.canAdministerTenant(user, channel.tenantId);
+  if (!isAdmin) {
+    throw Forbidden('Only channel admins can update the group');
+  }
+  const data = {};
+  if (input.name != null) data.name = input.name;
+  if (input.iconUrl !== undefined) data.iconUrl = input.iconUrl || null;
+  if (input.description !== undefined) data.description = input.description;
+  return prisma.channel.update({ where: { id }, data });
+}
+
+module.exports = {
+  ensureMember,
+  assertChannelAccess,
+  listForUser,
+  directoryForUser,
+  create,
+  getById,
+  addMembers,
+  removeMember,
+  deleteGroup,
+  pin,
+  archive,
+  setPolicy,
+  setMemberPermissions,
+  updateChannel,
+};

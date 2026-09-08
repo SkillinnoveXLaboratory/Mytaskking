@@ -1,0 +1,840 @@
+import 'dart:async';
+import 'dart:math';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mytaskking_design/mytaskking_design.dart';
+import 'package:speech_to_text/speech_recognition_result.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+
+import '../../state.dart';
+import '../shell_screen.dart';
+import 'business_directory_service.dart';
+import 'field_helpers.dart';
+import 'field_route_helpers.dart';
+import 'shop_listing_card.dart';
+import 'shop_detail_screen.dart';
+import 'shop_search_fuzzy.dart';
+
+/// Rotating placeholder categories shown one-by-one in the shop-type search
+/// bar so the user can tap Search without typing anything.
+const List<String> _kCategorySuggestions = [
+  'Retail & Shopping',
+  'Grocery & Kirana Store',
+  'Pharmacy / Medical Store',
+  'Stationery & Book Shop',
+  'Mobile Shop & Accessories',
+  'Electronics Showroom',
+  'Clothing & Boutique',
+  'Footwear Store',
+  'Jewelry Shop',
+  'Furniture Shop',
+  'Home Appliances Store',
+  'Bakery & Cafe',
+  'Sweet Shop',
+  'Plywood & Hardware Store',
+  'Paint & Sanitary Shop',
+  'Cement, Steel & Bricks Dealer',
+  'Tiles & Marble Showroom',
+  'Interior Design / Modular Kitchen',
+  'Four-Wheeler Showroom / Car Dealer',
+  'Two-Wheeler Showroom / Bike & Scooter Dealer',
+  'Car Service & Garage',
+  'Spare Parts Shop',
+  'Tyre Shop',
+  'Fuel Station / Petrol Bunk',
+  'Restaurant / Dhaba',
+  'Cloud Kitchen',
+  'Hotel / Lodge',
+  'Clinic & Diagnostic Lab',
+  'Dental Clinic',
+  'Eye Clinic / Optical Store',
+  'Physiotherapy Center',
+  'Veterinary Clinic / Pet Care',
+  'School / Coaching Center',
+  'Computer & Skill Training Center',
+  'Printing & Photocopy',
+  'Courier & Logistics',
+  'Travel Agency',
+  'Beauty Salon / Spa',
+  'Gym & Fitness Center',
+  "Men's Salon / Barber Shop",
+  'Beauty & Cosmetics Store',
+  'Bakery',
+  'Fruit & Vegetable Store',
+  'Meat & Chicken Shop',
+  'Dairy / Milk Products Store',
+  'Hardware & Electrical Shop',
+  'Gift & Toy Shop',
+  'Sports Shop',
+  'Optical Shop',
+  'Pet Shop',
+  'Laundry & Dry Cleaning',
+  'Car Wash & Detailing',
+  'Photography & Videography Studio',
+  'Event Management / Decoration',
+  'Real Estate Agency',
+  'Insurance Agency',
+  'Finance / Loan Services',
+  'Internet Cafe / Browsing Center',
+  'Electrical & Lighting Store',
+  'Agricultural / Farm Equipment Store',
+  'Fertilizer & Pesticide Store',
+];
+
+/// Shop/business directory — voice + smart search + rich listing cards.
+class MarketingShopSearchScreen extends ConsumerStatefulWidget {
+  const MarketingShopSearchScreen({super.key});
+
+  @override
+  ConsumerState<MarketingShopSearchScreen> createState() =>
+      _MarketingShopSearchScreenState();
+}
+
+class _MarketingShopSearchScreenState
+    extends ConsumerState<MarketingShopSearchScreen> {
+  final _query = TextEditingController();
+  final _area = TextEditingController();
+  final _queryFocus = FocusNode();
+  final _areaFocus = FocusNode();
+  final _speech = stt.SpeechToText();
+
+  List<Map<String, dynamic>> _results = const [];
+  List<String> _querySuggestions = const [];
+  List<String> _areaSuggestions = const [];
+  bool _loading = false;
+  bool _isListening = false;
+  String _voiceText = '';
+  String _voiceTarget = 'query';
+  String? _error;
+  String? _voiceHint;
+  String? _correctionHint;
+  String? _savingId;
+
+  // Rotating random placeholder for the shop-type search bar.
+  final Random _random = Random();
+  Timer? _rotator;
+  String _rotatingSuggestion = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _query.addListener(_onQueryChanged);
+    _area.addListener(_onAreaChanged);
+    _queryFocus.addListener(_onFieldFocusChanged);
+    _areaFocus.addListener(_onFieldFocusChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _startRotator());
+  }
+
+  void _startRotator() {
+    if (!mounted) return;
+    _tickRotator();
+    _rotator =
+        Timer.periodic(const Duration(seconds: 2), (_) => _tickRotator());
+  }
+
+  /// Picks a random category and advances the rotating search hint.
+  /// Paused while a voice search is listening so it never conflicts with speech.
+  void _tickRotator() {
+    if (!mounted || _isListening) return;
+    final next =
+        _kCategorySuggestions[_random.nextInt(_kCategorySuggestions.length)];
+    if (!mounted) return;
+    setState(() => _rotatingSuggestion = next);
+  }
+
+  void _onQueryChanged() {
+    if (!mounted) return;
+    setState(() {
+      _querySuggestions = ShopSearchFuzzy.suggestCategories(_query.text);
+    });
+  }
+
+  void _onAreaChanged() {
+    if (!mounted) return;
+    setState(() {
+      _areaSuggestions = ShopSearchFuzzy.suggestAreas(_area.text);
+    });
+  }
+
+  void _onFieldFocusChanged() {
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  void _clearSuggestions() {
+    _querySuggestions = const [];
+    _areaSuggestions = const [];
+  }
+
+  /// Cycles through a category every ~2s as the shop-type field's hint so the
+  /// user can tap Search without typing. Hidden automatically when the field
+  /// has text, while listening to voice, or when the area mic is active.
+  String get _queryHintText {
+    if (_isListening && _voiceTarget == 'query') {
+      return _voiceHint ?? 'Listening…';
+    }
+    if (_rotatingSuggestion.isNotEmpty) return _rotatingSuggestion;
+    return 'e.g. Plywood, Medical store';
+  }
+
+  void _applySuggestion(TextEditingController controller, String value) {
+    controller.text = value;
+    controller.selection = TextSelection.collapsed(offset: value.length);
+    setState(_clearSuggestions);
+  }
+
+  @override
+  void dispose() {
+    _rotator?.cancel();
+    _speech.cancel();
+    _query.removeListener(_onQueryChanged);
+    _area.removeListener(_onAreaChanged);
+    _queryFocus.removeListener(_onFieldFocusChanged);
+    _areaFocus.removeListener(_onFieldFocusChanged);
+    _queryFocus.dispose();
+    _areaFocus.dispose();
+    _query.dispose();
+    _area.dispose();
+    super.dispose();
+  }
+
+  List<String> _splitVoiceAreas(String raw) {
+    return raw
+        .split(RegExp(r'\s*(?:,|/|;|\||\band\b|\&)\s*', caseSensitive: false))
+        .map((e) => e.trim())
+        .where((e) => e.length > 1)
+        .toList();
+  }
+
+  ({String query, String area}) _parseVoiceText(String spoken) {
+    final text = spoken.trim();
+    if (text.isEmpty) return (query: '', area: '');
+
+    var query = text;
+    var areas = <String>[];
+    final areaMatch = RegExp(
+      r'\b(?:in|near|around|at|within)\b\s+(.+)$',
+      caseSensitive: false,
+    ).firstMatch(text);
+
+    if (areaMatch != null) {
+      query = text.substring(0, areaMatch.start).trim();
+      areas = _splitVoiceAreas(areaMatch.group(1) ?? '');
+    }
+
+    query = query
+        .replaceAll(
+          RegExp(
+            r'\b(?:find|search|show|shops?|stores?|outlets?|businesses?|suppliers?|nearby|please|for|me)\b',
+            caseSensitive: false,
+          ),
+          ' ',
+        )
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    if (areas.isEmpty && query.isNotEmpty) {
+      final lowerQuery = query.toLowerCase();
+      for (final category in ShopSearchFuzzy.categories) {
+        final lowerCategory = category.toLowerCase();
+        if (lowerQuery.startsWith('$lowerCategory ')) {
+          final possibleArea = query.substring(category.length).trim();
+          if (possibleArea.isNotEmpty) {
+            query = category;
+            areas = _splitVoiceAreas(possibleArea);
+          }
+          break;
+        }
+      }
+      if (areas.isEmpty) {
+        final words = query.split(RegExp(r'\s+'));
+        if (words.length >= 2) {
+          final firstFix = ShopSearchFuzzy.correctQuery(words.first);
+          if (firstFix.changed) {
+            query = firstFix.text;
+            areas = _splitVoiceAreas(words.sublist(1).join(' '));
+          }
+        } else {
+          final fuzzyCat = ShopSearchFuzzy.correctQuery(query);
+          if (fuzzyCat.changed) query = fuzzyCat.text;
+        }
+      }
+    }
+
+    if (query.isEmpty && areas.isEmpty) query = text;
+
+    return (
+      query: query,
+      area: areas.isEmpty ? '' : areas.join(', '),
+    );
+  }
+
+  void _applyVoiceText(String spoken) {
+    final parsed = _parseVoiceText(spoken);
+    setState(() {
+      _voiceText = spoken.trim();
+      if (parsed.query.isNotEmpty) _query.text = parsed.query;
+      if (parsed.area.isNotEmpty) _area.text = parsed.area;
+      _error = null;
+    });
+  }
+
+  Future<void> _startVoiceSearch(String target) async {
+    if (_loading || _isListening) return;
+    _voiceTarget = target;
+    FocusScope.of(context).unfocus();
+
+    final available = await _speech.initialize(
+      onStatus: (status) {
+        if (!mounted) return;
+        if (status == 'done' || status == 'notListening') {
+          setState(() => _isListening = false);
+        }
+      },
+      onError: (_) {
+        if (!mounted) return;
+        setState(() {
+          _isListening = false;
+          _error = 'Could not hear clearly. Tap the mic and try again.';
+        });
+      },
+    );
+
+    if (!mounted) return;
+    if (!available) {
+      setState(() => _error = 'Voice search is not available on this phone.');
+      return;
+    }
+
+    setState(() {
+      _isListening = true;
+      _voiceText = '';
+      _voiceHint = target == 'area'
+          ? 'Listening… say the area, e.g. "Kukatpally".'
+          : 'Listening… say shop type, e.g. "Plywood".';
+      _error = null;
+    });
+
+    await _speech.listen(
+      listenFor: const Duration(minutes: 2),
+      pauseFor: const Duration(seconds: 25),
+      localeId: 'en_IN',
+      onResult: (SpeechRecognitionResult result) {
+        if (!mounted) return;
+        setState(() => _voiceText = result.recognizedWords);
+      },
+    );
+  }
+
+  Future<void> _finishVoiceSearch() async {
+    final spoken = _voiceText.trim();
+    await _speech.stop();
+    if (!mounted) return;
+    setState(() {
+      _isListening = false;
+      _voiceHint = null;
+    });
+    if (spoken.isEmpty) {
+      setState(() => _error = 'Nothing heard. Tap the mic and try again.');
+      return;
+    }
+    if (_voiceTarget == 'area') {
+      setState(() => _area.text = spoken);
+    } else {
+      _applyVoiceText(spoken);
+    }
+    await _search();
+  }
+
+  Future<void> _search() async {
+    final q = _query.text.trim();
+    final area = _area.text.trim();
+    final effectiveQ = q.isNotEmpty ? q : _rotatingSuggestion;
+    if (effectiveQ.isEmpty && area.isEmpty) {
+      setState(() => _error = 'Enter shop type and/or area, or use the mic.');
+      return;
+    }
+
+    final normalized = BusinessDirectoryService.normalizeInputs(
+      query: effectiveQ,
+      area: area,
+    );
+    String? correctionHint;
+    if (normalized.changed) {
+      final parts = <String>[];
+      if (normalized.query.isNotEmpty &&
+          normalized.query.toLowerCase() != effectiveQ.toLowerCase()) {
+        parts.add('shop type “${normalized.query}”');
+      }
+      if (normalized.area.isNotEmpty &&
+          normalized.area.toLowerCase() != area.toLowerCase()) {
+        parts.add('area “${normalized.area}”');
+      }
+      if (parts.isNotEmpty) {
+        correctionHint = 'Showing results for ${parts.join(' and ')}';
+      }
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+      _correctionHint = correctionHint;
+      _clearSuggestions();
+    });
+
+    try {
+      final pos = await FieldRouteHelpers.resolveCurrentPosition();
+      final service = BusinessDirectoryService(ref.read(apiProvider));
+      final rawAreas = area.isEmpty
+          ? ['']
+          : _splitVoiceAreas(area).isEmpty
+              ? [area]
+              : _splitVoiceAreas(area);
+
+      final merged = <Map<String, dynamic>>[];
+      final seen = <String>{};
+
+      for (final a in rawAreas) {
+        final correctedArea = ShopSearchFuzzy.correctArea(a).text;
+        final batch = await service.search(
+          query: effectiveQ,
+          area: correctedArea.isEmpty ? null : correctedArea,
+          latitude: pos?.latitude,
+          longitude: pos?.longitude,
+          radiusKm: correctedArea.isEmpty ? 10 : 8,
+          limit: 30,
+        );
+        for (final item in batch) {
+          final key =
+              '${item['businessName']}|${item['address']}'.toLowerCase();
+          if (seen.add(key)) {
+            if (correctedArea.isNotEmpty) item['searchArea'] = correctedArea;
+            merged.add(item);
+          }
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _results = merged;
+        _loading = false;
+        if (merged.isEmpty) {
+          final displayQ =
+              normalized.query.isNotEmpty ? normalized.query : effectiveQ;
+          final displayArea =
+              normalized.area.isNotEmpty ? normalized.area : area;
+          _error = displayQ.isEmpty
+              ? 'No shops found in $displayArea.'
+              : 'No shops found for “$displayQ”${displayArea.isEmpty ? '' : ' in $displayArea'}.';
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = formatApiError(e);
+        _loading = false;
+        _correctionHint = null;
+      });
+    }
+  }
+
+  Future<void> _saveAsOutlet(Map<String, dynamic> biz) async {
+    final id = biz['id']?.toString() ??
+        biz['placeId']?.toString() ??
+        biz['businessName']?.toString();
+
+    final exec = await ensureExecutiveForOutlet(context, ref);
+    if (!mounted) return;
+    if (mustAssignExecutiveOnOutletCreate(ref.read(authStoreProvider).user) &&
+        exec == null) {
+      bestieToast(context, 'Assign executive',
+          body:
+              'Select a field executive before saving this shop as an outlet.',
+          kind: BestieToastKind.warning);
+      return;
+    }
+
+    setState(() => _savingId = id);
+    try {
+      await ref.read(apiProvider).createMarketingOutlet({
+        'name': biz['businessName'] ?? 'Shop',
+        'phone': biz['contactPhone'],
+        'address': biz['address'],
+        'latitude': biz['gpsLat'],
+        'longitude': biz['gpsLng'],
+        'category': biz['businessCategory'],
+        if (exec != null) 'assignedToId': exec['id'],
+        'source': 'directory',
+      });
+      if (mounted) {
+        bestieToast(context, 'Saved as outlet', kind: BestieToastKind.success);
+      }
+    } catch (e) {
+      if (mounted) {
+        bestieToast(context, 'Could not save outlet',
+            body: formatApiError(e), kind: BestieToastKind.error);
+      }
+    } finally {
+      if (mounted) setState(() => _savingId = null);
+    }
+  }
+
+  int _gridColumns(double width) {
+    if (width >= 1000) return 3;
+    if (width >= 680) return 2;
+    return 1;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = BestieColors.of(context);
+    final bottomClearance = shellNavClearance(context);
+    final user = ref.watch(authStoreProvider).user;
+    final isManagerOnly =
+        user?.isFieldManager == true && !canActAsFieldExecutive(user);
+
+    return Scaffold(
+      backgroundColor: c.surface,
+      appBar: AppBar(
+        title: const Text('Search Business'),
+        backgroundColor: c.surface,
+        foregroundColor: c.textMuted,
+      ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final cols = _gridColumns(constraints.maxWidth);
+          return CustomScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            slivers: [
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        isManagerOnly
+                            ? 'Find shops to add as outlets for your team. You will assign an executive when saving.'
+                            : 'Find shops to add as outlets. Type or tap the mic.',
+                        style: TextStyle(color: c.textMuted, fontSize: 13),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _query,
+                        focusNode: _queryFocus,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: InputDecoration(
+                          labelText: 'Shop type',
+                          hintText: _queryHintText,
+                          filled: true,
+                          fillColor: c.surface2,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          suffixIcon: IconButton(
+                            tooltip: 'Voice search shop',
+                            icon: Icon(
+                              _isListening && _voiceTarget == 'query'
+                                  ? Icons.graphic_eq_rounded
+                                  : Icons.mic_rounded,
+                              color: _isListening && _voiceTarget == 'query'
+                                  ? c.success
+                                  : c.brand,
+                            ),
+                            onPressed: _isListening
+                                ? (_voiceTarget == 'query'
+                                    ? _finishVoiceSearch
+                                    : null)
+                                : () => _startVoiceSearch('query'),
+                          ),
+                        ),
+                        onSubmitted: (_) => _search(),
+                      ),
+                      if (_queryFocus.hasFocus &&
+                          _querySuggestions.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        _SuggestionStrip(
+                          colors: c,
+                          label: 'Shop type suggestions',
+                          items: _querySuggestions,
+                          onSelect: (s) => _applySuggestion(_query, s),
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _area,
+                        focusNode: _areaFocus,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: InputDecoration(
+                          labelText: 'Area (optional)',
+                          hintText: 'e.g. Kukatpally, Hyderabad',
+                          filled: true,
+                          fillColor: c.surface2,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          suffixIcon: IconButton(
+                            tooltip: 'Voice search area',
+                            icon: Icon(
+                              _isListening && _voiceTarget == 'area'
+                                  ? Icons.graphic_eq_rounded
+                                  : Icons.mic_rounded,
+                              color: _isListening && _voiceTarget == 'area'
+                                  ? c.success
+                                  : c.brand,
+                            ),
+                            onPressed: _isListening
+                                ? (_voiceTarget == 'area'
+                                    ? _finishVoiceSearch
+                                    : null)
+                                : () => _startVoiceSearch('area'),
+                          ),
+                        ),
+                        onSubmitted: (_) => _search(),
+                      ),
+                      if (_areaFocus.hasFocus &&
+                          _areaSuggestions.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        _SuggestionStrip(
+                          colors: c,
+                          label: 'Area suggestions',
+                          items: _areaSuggestions,
+                          onSelect: (s) => _applySuggestion(_area, s),
+                        ),
+                      ],
+                      const SizedBox(height: 10),
+                      FilledButton.icon(
+                        onPressed: _loading ? null : _search,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: c.brand,
+                          minimumSize: const Size.fromHeight(48),
+                        ),
+                        icon: _loading
+                            ? SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: c.surface),
+                              )
+                            : const Icon(Icons.search_rounded),
+                        label: Text(_loading ? 'Searching…' : 'Search shops'),
+                      ),
+                      if (_isListening || _voiceText.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: _isListening ? c.successSoft : c.surface2,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: _isListening
+                                  ? c.success.withValues(alpha: 0.4)
+                                  : c.borderSoft,
+                            ),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                _isListening
+                                    ? Icons.mic_rounded
+                                    : Icons.record_voice_over_outlined,
+                                size: 20,
+                                color: _isListening ? c.success : c.textMuted,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _isListening
+                                      ? (_voiceText.isEmpty
+                                          ? (_voiceHint ?? 'Listening…')
+                                          : _voiceText)
+                                      : 'Heard: $_voiceText',
+                                  style: TextStyle(
+                                      color: c.text,
+                                      fontSize: 13,
+                                      height: 1.35),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      if (_error != null) ...[
+                        const SizedBox(height: 12),
+                        Text(_error!,
+                            style: TextStyle(color: c.danger, fontSize: 13)),
+                      ],
+                      if (_correctionHint != null && _error == null) ...[
+                        const SizedBox(height: 12),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.spellcheck_rounded,
+                                size: 18, color: c.info),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _correctionHint!,
+                                style: TextStyle(
+                                    color: c.textMuted,
+                                    fontSize: 13,
+                                    height: 1.35),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              if (_loading)
+                const SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(child: BestieSpinner()),
+                )
+              else if (_results.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        'Search or use voice to find shops',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: c.textMuted),
+                      ),
+                    ),
+                  ),
+                )
+              else if (cols == 1)
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(16, 4, 16, bottomClearance),
+                  sliver: SliverList.separated(
+                    itemCount: _results.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 16),
+                    itemBuilder: (_, i) => _cardAt(i),
+                  ),
+                )
+              else
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(16, 4, 16, bottomClearance),
+                  sliver: SliverGrid(
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: cols,
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                      mainAxisExtent: 460,
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      (_, i) => _cardAt(i),
+                      childCount: _results.length,
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _cardAt(int i) {
+    final biz = _results[i];
+    final id = biz['id']?.toString() ?? biz['placeId']?.toString() ?? '$i';
+    return ShopListingCard(
+      shop: biz,
+      saving: _savingId == id,
+      onTap: () => _openDetail(biz),
+      onSaveOutlet: () => _saveAsOutlet(biz),
+    );
+  }
+
+  void _openDetail(Map<String, dynamic> biz) {
+    final id = biz['id']?.toString() ?? biz['placeId']?.toString() ?? '';
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ShopDetailScreen(
+          shop: biz,
+          saving: _savingId == id,
+          onSaveOutlet: () => _saveAsOutlet(biz),
+        ),
+      ),
+    );
+  }
+}
+
+class _SuggestionStrip extends StatelessWidget {
+  const _SuggestionStrip({
+    required this.colors,
+    required this.label,
+    required this.items,
+    required this.onSelect,
+  });
+
+  final BestieColors colors;
+  final String label;
+  final List<String> items;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = colors;
+    return Material(
+      color: c.surface2,
+      elevation: 0,
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 2),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: c.textFaint,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ),
+          for (var i = 0; i < items.length; i++) ...[
+            if (i > 0) Divider(height: 1, color: c.borderSoft),
+            InkWell(
+              onTap: () => onSelect(items[i]),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                child: Row(
+                  children: [
+                    Icon(Icons.north_west_rounded, size: 16, color: c.brand),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        items[i],
+                        style: TextStyle(
+                          color: c.text,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}

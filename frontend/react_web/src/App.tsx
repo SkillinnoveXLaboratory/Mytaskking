@@ -1,0 +1,198 @@
+import { Navigate, Route, Routes } from 'react-router-dom';
+import { useEffect } from 'react';
+import { useAuthStore } from '@/store/auth';
+import LoginPage from '@/pages/LoginPage';
+import WorkspaceLayout from '@/layouts/WorkspaceLayout';
+import DashboardPage from '@/pages/DashboardPage';
+import ChatPage from '@/pages/ChatPage';
+import ChannelsPage from '@/pages/ChannelsPage';
+import TasksPage from '@/pages/TasksPage';
+import ReportsPage from '@/pages/ReportsPage';
+import CallsPage from '@/pages/CallsPage';
+import CallRoomPage from '@/pages/CallRoomPage';
+import TelecallerPage from '@/pages/TelecallerPage';
+import EmployeesPage from '@/pages/EmployeesPage';
+import FieldVisitsPage from '@/pages/FieldVisitsPage';
+import ClientsPage from '@/pages/ClientsPage';
+import ActivityPage from '@/pages/ActivityPage';
+import CalendarPage from '@/pages/CalendarPage';
+import SettingsPage from '@/pages/SettingsPage';
+import SavedPage from '@/pages/SavedPage';
+import SessionsPage from '@/pages/SessionsPage';
+import AnalyticsPage from '@/pages/AnalyticsPage';
+import MeetingsPage from '@/pages/MeetingsPage';
+import MeetingJoinPage from '@/pages/MeetingJoinPage';
+import PrivacyPolicyPage from '@/pages/PrivacyPolicyPage';
+import RecordingsPage from '@/pages/RecordingsPage';
+import AiReviewPage from '@/pages/AiReviewPage';
+import TalkTimePage from '@/pages/TalkTimePage';
+import LoginActivityPage from '@/pages/LoginActivityPage';
+import RequestLeavePage from '@/pages/RequestLeavePage';
+import LeaveApprovalsPage from '@/pages/LeaveApprovalsPage';
+import FlagsPage from '@/pages/FlagsPage';
+import OrganizationsPage from '@/pages/OrganizationsPage';
+import PaymentsPage from '@/pages/PaymentsPage';
+import ReportProblemPage from '@/pages/ReportProblemPage';
+import SupportIssuesPage from '@/pages/SupportIssuesPage';
+import PermissionsPage from '@/pages/PermissionsPage';
+import DeletedChatsPage from '@/pages/DeletedChatsPage';
+import { ToastHost } from '@/components/Toast';
+import { toast } from '@/components/Toast';
+import { CommandPalette } from '@/components/CommandPalette';
+import { ShortcutsOverlay } from '@/components/ShortcutsOverlay';
+import { onForegroundPush, registerWebPush } from '@/services/firebaseMessaging';
+import { canAccessSupportIssues } from '@/utils/supportAccess';
+
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const token = useAuthStore((s) => s.accessToken);
+  if (!token) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
+
+function RoleGate({ allow, children }: { allow: string[]; children: React.ReactNode }) {
+  const user = useAuthStore((s) => s.user);
+  if (!user) return <Navigate to="/login" replace />;
+  if (!allow.includes(user.role)) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
+
+function SupportIssuesGate({ children }: { children: React.ReactNode }) {
+  const user = useAuthStore((s) => s.user);
+  if (!canAccessSupportIssues(user)) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
+
+function PushRegistration() {
+  const token = useAuthStore((s) => s.accessToken);
+
+  useEffect(() => {
+    if (!token) return;
+
+    registerWebPush().catch(() => {});
+
+    let unsubscribe: (() => void) | undefined;
+    onForegroundPush((payload) => {
+      toast.info(payload.notification?.title || 'New notification', payload.notification?.body);
+    }).then((off) => {
+      unsubscribe = off;
+    });
+
+    return () => unsubscribe?.();
+  }, [token]);
+
+  return null;
+}
+
+export default function App() {
+  return (
+    <>
+      <PushRegistration />
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/meetings/join/:slug" element={<MeetingJoinPage />} />
+        <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+        <Route path="/privacy" element={<Navigate to="/privacy-policy" replace />} />
+
+        <Route element={<RequireAuth><WorkspaceLayout /></RequireAuth>}>
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/chat" element={<ChatPage />} />
+          <Route path="/chat/:channelId" element={<ChatPage />} />
+          <Route path="/channels" element={<ChannelsPage />} />
+          <Route path="/tasks" element={<TasksPage />} />
+          <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/calls" element={<CallsPage />} />
+          <Route path="/calls/live/:callId" element={<CallRoomPage />} />
+          <Route path="/calendar" element={<CalendarPage />} />
+          <Route path="/saved" element={<SavedPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/report-problem" element={<ReportProblemPage />} />
+          <Route
+            path="/support-issues"
+            element={
+              <SupportIssuesGate>
+                <SupportIssuesPage />
+              </SupportIssuesGate>
+            }
+          />
+          <Route path="/sessions" element={<SessionsPage />} />
+          <Route path="/meetings" element={<MeetingsPage />} />
+          <Route
+            path="/recordings"
+            element={<RoleGate allow={['SUPER_ADMIN', 'ADMIN']}><RecordingsPage /></RoleGate>}
+          />
+          <Route
+            path="/ai-review"
+            element={<RoleGate allow={['SUPER_ADMIN', 'ADMIN']}><AiReviewPage /></RoleGate>}
+          />
+          <Route
+            path="/deleted-chats"
+            element={<RoleGate allow={['SUPER_ADMIN', 'ADMIN']}><DeletedChatsPage /></RoleGate>}
+          />
+          <Route
+            path="/activity"
+            element={<RoleGate allow={['SUPER_ADMIN', 'ADMIN']}><ActivityPage /></RoleGate>}
+          />
+          <Route
+            path="/flags"
+            element={<RoleGate allow={['SUPER_ADMIN', 'ADMIN']}><FlagsPage /></RoleGate>}
+          />
+          <Route
+            path="/organizations"
+            element={<RoleGate allow={['SUPER_ADMIN']}><OrganizationsPage /></RoleGate>}
+          />
+          <Route
+            path="/payments"
+            element={<RoleGate allow={['SUPER_ADMIN']}><PaymentsPage /></RoleGate>}
+          />
+          <Route
+            path="/permissions"
+            element={<RoleGate allow={['SUPER_ADMIN', 'ADMIN']}><PermissionsPage /></RoleGate>}
+          />
+          <Route
+            path="/analytics"
+            element={<RoleGate allow={['SUPER_ADMIN', 'ADMIN']}><AnalyticsPage /></RoleGate>}
+          />
+          <Route
+            path="/talk-time"
+            element={<RoleGate allow={['SUPER_ADMIN', 'ADMIN']}><TalkTimePage /></RoleGate>}
+          />
+          <Route
+            path="/login-activity"
+            element={<RoleGate allow={['SUPER_ADMIN', 'ADMIN']}><LoginActivityPage /></RoleGate>}
+          />
+          <Route
+            path="/request-leave"
+            element={<RoleGate allow={['MANAGER', 'PROJECT_COORDINATOR_MANAGER', 'EMPLOYEE', 'TELECALLER', 'EXECUTIVE', 'SALES_HEAD']}><RequestLeavePage /></RoleGate>}
+          />
+          <Route
+            path="/leave-approvals"
+            element={<RoleGate allow={['SUPER_ADMIN', 'ADMIN']}><LeaveApprovalsPage /></RoleGate>}
+          />
+          <Route
+            path="/telecaller"
+            element={<RoleGate allow={['SUPER_ADMIN', 'ADMIN', 'TELECALLER']}><TelecallerPage /></RoleGate>}
+          />
+          <Route
+            path="/field-visits"
+            element={<RoleGate allow={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'PROJECT_COORDINATOR_MANAGER']}><FieldVisitsPage /></RoleGate>}
+          />
+          <Route
+            path="/employees"
+            element={<RoleGate allow={['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'PROJECT_COORDINATOR_MANAGER', 'EMPLOYEE', 'TELECALLER', 'EXECUTIVE']}><EmployeesPage /></RoleGate>}
+          />
+          <Route
+            path="/clients"
+            element={<RoleGate allow={['SUPER_ADMIN', 'ADMIN']}><ClientsPage /></RoleGate>}
+          />
+        </Route>
+
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+
+      <CommandPalette />
+      <ShortcutsOverlay />
+      <ToastHost />
+    </>
+  );
+}

@@ -1,0 +1,194 @@
+'use strict';
+
+const { Router } = require('express');
+const Joi = require('joi');
+const asyncHandler = require('../../utils/asyncHandler');
+const validate = require('../../middleware/validate');
+const { joiPhone } = require('../../utils/phone');
+const { authLimiter } = require('../../middleware/rateLimit');
+const { requireAuth } = require('../../middleware/auth');
+const authService = require('./auth.service');
+const audit = require('../../services/audit');
+
+const router = Router();
+
+router.get(
+  '/login-requirements',
+  authLimiter,
+  validate({
+    query: Joi.object({
+      userId: Joi.string().trim().min(2).max(64).required(),
+      tenantSlug: Joi.string().trim().min(2).max(48).allow('', null),
+    }),
+  }),
+  asyncHandler(async (req, res) => {
+    res.json(await authService.loginRequirements({
+      userId: req.query.userId,
+      tenantSlug: req.query.tenantSlug || null,
+    }));
+  })
+);
+
+router.post(
+  '/login',
+  authLimiter,
+  validate({
+    body: Joi.object({
+      tenantSlug: Joi.string().trim().min(2).max(48).allow('', null),
+      userId: Joi.string().trim().min(2).max(64).required(),
+      password: Joi.string().min(6).max(200).required(),
+      loginSource: Joi.string().valid('web', 'mobile').default('web'),
+      selfieBase64: Joi.string().max(4500000).allow('', null),
+      selfieMimeType: Joi.string().valid('image/jpeg', 'image/png').allow('', null),
+      latitude: Joi.number().min(-90).max(90).allow(null),
+      longitude: Joi.number().min(-180).max(180).allow(null),
+      address: Joi.string().max(500).allow('', null),
+    }),
+  }),
+  asyncHandler(async (req, res) => {
+    try {
+      const result = await authService.login({
+        tenantSlug: req.body.tenantSlug || null,
+        userId: req.body.userId,
+        password: req.body.password,
+        userAgent: req.headers['user-agent'],
+        ip: req.ip,
+        req,
+        loginSource: req.body.loginSource,
+        selfieBase64: req.body.selfieBase64,
+        selfieMimeType: req.body.selfieMimeType,
+        latitude: req.body.latitude,
+        longitude: req.body.longitude,
+        address: req.body.address,
+      });
+      audit.record({ actorId: result.user.id, kind: 'auth.login', entity: 'user', entityId: result.user.id, req });
+      res.json(result);
+    } catch (err) {
+      audit.record({
+        kind: 'auth.login_failed',
+        entity: 'user',
+        payload: { userId: req.body.userId, reason: err.code || 'unknown' },
+        req,
+      });
+      throw err;
+    }
+  })
+);
+
+router.post(
+  '/refresh',
+  validate({
+    body: Joi.object({ refreshToken: Joi.string().required() }),
+  }),
+  asyncHandler(async (req, res) => {
+    const result = await authService.refresh({
+      refreshToken: req.body.refreshToken,
+      userAgent: req.headers['user-agent'],
+      ip: req.ip,
+      req,
+    });
+    audit.record({ actorId: result.user.id, kind: 'auth.refresh', entity: 'user', entityId: result.user.id, req });
+    res.json(result);
+  })
+);
+
+router.post(
+  '/logout',
+  validate({
+    body: Joi.object({ refreshToken: Joi.string().allow('', null) }),
+  }),
+  asyncHandler(async (req, res) => {
+    await authService.logout({ refreshToken: req.body.refreshToken });
+    audit.record({ kind: 'auth.logout', entity: 'user', req });
+    res.json({ ok: true });
+  })
+);
+
+router.get(
+  '/me',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    res.json({ user: await authService.sanitizeWithTenant(req.user) });
+  })
+);
+
+router.patch(
+  '/me',
+  requireAuth,
+  validate({
+    body: Joi.object({
+      avatarUrl: Joi.string().uri().allow('', null),
+      phone: joiPhone(),
+    }).or('avatarUrl', 'phone'),
+  }),
+  asyncHandler(async (req, res) => {
+    const user = await authService.updateProfile({
+      user: req.user,
+      avatarUrl: req.body.avatarUrl,
+      phone: req.body.phone,
+    });
+    audit.record({
+      actorId: req.user.id,
+      kind: 'profile.updated',
+      entity: 'user',
+      entityId: req.user.id,
+      payload: { avatarUpdated: true },
+      req,
+    });
+    res.json({ user });
+  })
+);
+
+router.post(
+  '/change-password',
+  requireAuth,
+  validate({
+    body: Joi.object({
+      currentPassword: Joi.string().min(6).max(200).required(),
+      newPassword: Joi.string().min(8).max(200).required(),
+    }),
+  }),
+  asyncHandler(async (req, res) => {
+    const result = await authService.changePassword({
+      user: req.user,
+      currentPassword: req.body.currentPassword,
+      newPassword: req.body.newPassword,
+    });
+    audit.record({ actorId: req.user.id, kind: 'auth.password_changed', entity: 'user', entityId: req.user.id, req });
+    res.json(result);
+  })
+);
+
+router.post(
+  '/otp/send',
+  authLimiter,
+  validate({
+    body: Joi.object({
+      email: Joi.string().trim().email().required(),
+      phone: joiPhone({ required: true }),
+      purpose: Joi.string().valid('org_register').default('org_register'),
+    }),
+  }),
+  asyncHandler(async (req, res) => {
+    const otpService = require('../../services/otp.service');
+    res.json(await otpService.sendOtp(req.body));
+  })
+);
+
+router.post(
+  '/otp/verify',
+  authLimiter,
+  validate({
+    body: Joi.object({
+      email: Joi.string().trim().email().required(),
+      code: Joi.string().trim().length(6).required(),
+      purpose: Joi.string().valid('org_register').default('org_register'),
+    }),
+  }),
+  asyncHandler(async (req, res) => {
+    const otpService = require('../../services/otp.service');
+    res.json(await otpService.verifyOtp(req.body));
+  })
+);
+
+module.exports = router;

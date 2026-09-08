@@ -1,0 +1,65 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'widgets/call_screen_design.dart';
+
+/// Call-screen brightness — toggled only on the call screen. Does not change
+/// app-wide light/dark mode or any of the four color themes.
+final callScreenBrightnessProvider =
+    StateProvider<Brightness>((_) => Brightness.dark);
+
+/// Theme-aware palette for 1:1 call screens (voice + video backdrop).
+class OneToOneCallPalette {
+  const OneToOneCallPalette({
+    required this.backgroundTop,
+    required this.backgroundMid,
+    required this.backgroundBottom,
+    required this.textPrimary,
+    required this.textSecondary,
+    required this.textMuted,
+    required this.accentGreen,
+    required this.lightControls,
+    required this.chipBackground,
+    required this.chipBorder,
+  });
+
+  final Color backgroundTop;
+  final Color backgroundMid;
+  final Color backgroundBottom;
+  final Color textPrimary;
+  final Color textSecondary;
+  final Color textMuted;
+  final Color accentGreen;
+  final bool lightControls;
+  final Color chipBackground;
+  final Color chipBorder;
+
+  factory OneToOneCallPalette.forBrightness(Brightness brightness) {
+    if (brightness == Brightness.light) {
+      return const OneToOneCallPalette(
+        backgroundTop: Color(0xFFFFFFFF),
+        backgroundMid: Color(0xFFF8FAFC),
+        backgroundBottom: Color(0xFFEEF2F7),
+        textPrimary: Color(0xFF111827),
+        textSecondary: Color(0xFF475569),
+        textMuted: Color(0xFF64748B),
+        accentGreen: Color(0xFF16A34A),
+        lightControls: true,
+        chipBackground: Color(0xFFF0F2F5),
+        chipBorder: Color(0xFFD1D7DB),
+      );
+    }
+    return const OneToOneCallPalette(
+      backgroundTop: CallScreenUiColors.backgroundTop,
+      backgroundMid: CallScreenUiColors.backgroundMid,
+      backgroundBottom: CallScreenUiColors.backgroundBottom,
+      textPrimary: CallScreenUiColors.textPrimary,
+      textSecondary: CallScreenUiColors.textSecondary,
+      textMuted: CallScreenUiColors.textMuted,
+      accentGreen: CallScreenUiColors.neonGreen,
+      lightControls: false,
+      chipBackground: CallScreenUiColors.glassFill,
+      chipBorder: CallScreenUiColors.glassBorder,
+    );
+  }
+}
