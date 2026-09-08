@@ -8,6 +8,12 @@ $ApiUrl = "https://mytaskking.com"
 $SocketUrl = "https://mytaskking.com"
 
 Write-Host "==> Flutter release build (API: $ApiUrl)" -ForegroundColor Cyan
+flutter pub get
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+& (Join-Path $PSScriptRoot "prepare_windows_plugins.ps1")
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 flutter build windows --release `
   --dart-define=API_URL=$ApiUrl `
   --dart-define=SOCKET_URL=$SocketUrl
