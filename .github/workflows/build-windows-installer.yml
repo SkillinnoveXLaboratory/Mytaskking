@@ -30,7 +30,11 @@ jobs:
           flutter pub get
           $pluginLink = Join-Path $PWD "windows/flutter/ephemeral/.plugin_symlinks/agora_rtc_engine"
           if (Test-Path -LiteralPath $pluginLink) {
-            $pluginTarget = (Get-Item -LiteralPath $pluginLink -Force).Target
+            $pluginItem = Get-Item -LiteralPath $pluginLink -Force
+            $pluginTarget = $pluginItem.Target
+            if (-not $pluginTarget) {
+              $pluginTarget = (Resolve-Path -LiteralPath $pluginLink -ErrorAction Stop).Path
+            }
             if (-not $pluginTarget) {
               throw "Agora plugin link target could not be resolved: $pluginLink"
             }
@@ -38,7 +42,10 @@ jobs:
               $pluginTarget = Join-Path (Split-Path $pluginLink) $pluginTarget
             }
             $pluginTarget = (Resolve-Path -LiteralPath $pluginTarget).Path
-            Remove-Item -LiteralPath $pluginLink -Force
+            cmd /c rmdir "$pluginLink"
+            if (Test-Path -LiteralPath $pluginLink) {
+              throw "Could not remove Agora plugin link: $pluginLink"
+            }
             Copy-Item -LiteralPath $pluginTarget -Destination $pluginLink -Recurse -Force
           }
 
