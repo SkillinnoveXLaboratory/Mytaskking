@@ -44,6 +44,9 @@ final class MytaskkingDesktopPlugin {
           result(paths)
         }
       }
+    case "injectRemoteMouse":
+      let args = call.arguments as? [String: Any] ?? [:]
+      Self.injectRemoteMouse(args: args, result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -93,6 +96,71 @@ final class MytaskkingDesktopPlugin {
       }
     }
     return paths
+  }
+
+  // Accessibility permission is required by macOS before an app may post input
+  // events. Live Desk surfaces this error rather than attempting to bypass it.
+  private static func injectRemoteMouse(
+    args: [String: Any],
+    result: @escaping FlutterResult
+  ) {
+    guard AXIsProcessTrusted() else {
+      result(FlutterError(
+        code: "accessibility_required",
+        message: "Enable MyTaskKing in System Settings > Privacy & Security > Accessibility to use approved remote control.",
+        details: nil
+      ))
+      return
+    }
+    guard let screen = NSScreen.main else {
+      result(FlutterError(code: "screen_unavailable", message: "No active display found.", details: nil))
+      return
+    }
+
+    let x = min(max((args["x"] as? NSNumber)?.doubleValue ?? 0.5, 0), 1)
+    let y = min(max((args["y"] as? NSNumber)?.doubleValue ?? 0.5, 0), 1)
+    let frame = screen.frame
+    let point = CGPoint(
+      x: frame.minX + CGFloat(x) * frame.width,
+      y: frame.maxY - CGFloat(y) * frame.height
+    )
+    let action = args["action"] as? String ?? "move"
+    let buttonValue = (args["button"] as? NSNumber)?.intValue ?? 0
+    let mouseButton: CGMouseButton = buttonValue == 3 ? .right : buttonValue == 2 ? .center : .left
+    let downType: CGEventType = mouseButton == .right ? .rightMouseDown : mouseButton == .center ? .otherMouseDown : .leftMouseDown
+    let upType: CGEventType = mouseButton == .right ? .rightMouseUp : mouseButton == .center ? .otherMouseUp : .leftMouseUp
+
+    func post(_ type: CGEventType) {
+      CGEvent(
+        mouseEventSource: nil,
+        mouseType: type,
+        mouseCursorPosition: point,
+        mouseButton: mouseButton
+      )?.post(tap: .cghidEventTap)
+    }
+
+    switch action {
+    case "down":
+      post(downType)
+    case "up":
+      post(upType)
+    case "click":
+      post(downType)
+      post(upType)
+    case "scroll":
+      let delta = (args["delta"] as? NSNumber)?.int32Value ?? 0
+      CGEvent(
+        scrollWheelEvent2Source: nil,
+        units: .pixel,
+        wheelCount: 1,
+        wheel1: delta,
+        wheel2: 0,
+        wheel3: 0
+      )?.post(tap: .cghidEventTap)
+    default:
+      post(.mouseMoved)
+    }
+    result(nil)
   }
 
   private static func saveMainDisplayPng(to url: URL, maxWidth: Int) -> Bool {

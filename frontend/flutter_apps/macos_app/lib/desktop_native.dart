@@ -41,4 +41,23 @@ class DesktopNative {
     }
     return files;
   }
+
+  /// Injects one approved mouse action. macOS requires the user to grant this
+  /// app Accessibility permission before it can post system input events.
+  static Future<void> injectRemoteMouse({
+    required double x,
+    required double y,
+    required String action,
+    int button = 0,
+    int delta = 0,
+  }) async {
+    if (!isSupported) throw UnsupportedError('Remote mouse is macOS-only.');
+    await _channel.invokeMethod<void>('injectRemoteMouse', {
+      'x': x.clamp(0, 1),
+      'y': y.clamp(0, 1),
+      'action': action,
+      'button': button,
+      'delta': delta,
+    });
+  }
 }

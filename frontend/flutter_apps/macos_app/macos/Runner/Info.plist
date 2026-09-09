@@ -33,6 +33,8 @@
 	<key>NSCameraUsageDescription</key>
 	<string>MyTaskKing needs the camera for video calls.</string>
 	<key>NSScreenCaptureUsageDescription</key>
-	<string>MyTaskKing captures your screen during work-activity check-ins when enabled by your organization.</string>
+	<string>MyTaskKing captures your screen during approved work activity and Live Desk sessions.</string>
+	<key>NSAccessibilityUsageDescription</key>
+	<string>MyTaskKing uses Accessibility only to control this Mac during an explicitly approved Live Desk session.</string>
 </dict>
 </plist>
