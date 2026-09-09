@@ -169,15 +169,15 @@ module.exports = function initSockets(server) {
 
     // Remote control is consented and session-bound. The server only relays
     // signaling/control messages after the host has approved the session.
-    socket.on('remote.join', ({ sessionId }) => {
-      if (remoteControl.canUse(sessionId, userId)) socket.join(`remote:${sessionId}`);
+    socket.on('remote.join', async ({ sessionId }) => {
+      if (await remoteControl.canUse(sessionId, userId)) socket.join(`remote:${sessionId}`);
     });
-    socket.on('remote.signal', ({ sessionId, payload }) => {
-      if (!remoteControl.canUse(sessionId, userId)) return;
+    socket.on('remote.signal', async ({ sessionId, payload }) => {
+      if (!await remoteControl.canUse(sessionId, userId)) return;
       socket.to(`remote:${sessionId}`).emit('remote.signal', { sessionId, from: userId, payload });
     });
-    socket.on('remote.mouse', ({ sessionId, x, y, action, button, delta }) => {
-      if (!remoteControl.canUse(sessionId, userId)) return;
+    socket.on('remote.mouse', async ({ sessionId, x, y, action, button, delta }) => {
+      if (!await remoteControl.canUse(sessionId, userId)) return;
       socket.to(`remote:${sessionId}`).emit('remote.mouse', {
         sessionId, from: userId, x, y, action, button, delta,
       });

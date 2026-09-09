@@ -17,12 +17,16 @@ router.get('/sessions', asyncHandler(async (req, res) => {
 }));
 
 router.get('/computers', asyncHandler(async (req, res) => {
-  res.json({ items: await service.listComputers(req.user.id, tenantIdFor(req)) });
+  const platform = ['WINDOWS', 'LINUX'].includes(req.query.platform)
+    ? req.query.platform
+    : undefined;
+  res.json({ items: await service.listComputers(req.user.id, tenantIdFor(req), platform) });
 }));
 
 router.post('/register', validate({ body: Joi.object({
   computerId: Joi.string().trim().min(4).max(64).required(),
   computerName: Joi.string().trim().max(120).allow('', null),
+  platform: Joi.string().valid('WINDOWS', 'LINUX').default('WINDOWS'),
 }) }), asyncHandler(async (req, res) => {
   res.status(201).json(await service.registerComputer({
     ...req.body, hostUserId: req.user.id, tenantId: tenantIdFor(req),

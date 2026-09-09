@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <memory>
@@ -15,8 +16,10 @@
 #include <vector>
 
 #ifdef GDK_WINDOWING_X11
+#include <gdk/gdkx.h>
 #include <X11/Xlib.h>
 #include <X11/extensions/scrnsaver.h>
+#include <X11/extensions/XTest.h>
 #endif
 
 namespace {
@@ -50,6 +53,34 @@ int GetIntArg(FlValue* args, const char* key, int fallback) {
     return static_cast<int>(fl_value_get_float(value));
   }
   return fallback;
+}
+
+double GetDoubleArg(FlValue* args, const char* key, double fallback) {
+  if (args == nullptr || fl_value_get_type(args) != FL_VALUE_TYPE_MAP) {
+    return fallback;
+  }
+  FlValue* value = fl_value_lookup_string(args, key);
+  if (value == nullptr) return fallback;
+  if (fl_value_get_type(value) == FL_VALUE_TYPE_INT) {
+    return static_cast<double>(fl_value_get_int(value));
+  }
+  if (fl_value_get_type(value) == FL_VALUE_TYPE_FLOAT) {
+    return fl_value_get_float(value);
+  }
+  return fallback;
+}
+
+std::string GetStringArg(FlValue* args, const char* key,
+                         const std::string& fallback = "") {
+  if (args == nullptr || fl_value_get_type(args) != FL_VALUE_TYPE_MAP) {
+    return fallback;
+  }
+  FlValue* value = fl_value_lookup_string(args, key);
+  if (value == nullptr || fl_value_get_type(value) != FL_VALUE_TYPE_STRING) {
+    return fallback;
+  }
+  const gchar* text = fl_value_get_string(value);
+  return text == nullptr ? fallback : text;
 }
 
 void FinishPrompt(PromptResult* state, const std::string& note) {
@@ -249,6 +280,54 @@ std::vector<std::string> CaptureFrames(int frame_count,
   return paths;
 }
 
+// X11 permits event injection into the current display. Wayland intentionally
+// does not expose this capability to regular desktop applications.
+std::string InjectRemoteMouse(FlValue* args) {
+#ifdef GDK_WINDOWING_X11
+  GdkDisplay* gdk_display = gdk_display_get_default();
+  if (gdk_display == nullptr || !GDK_IS_X11_DISPLAY(gdk_display)) {
+    return "Remote mouse control is available only in an X11 Linux session.";
+  }
+
+  Display* display = XOpenDisplay(nullptr);
+  if (display == nullptr) return "Unable to open the X11 display.";
+
+  const double normalized_x = std::max(0.0, std::min(1.0,
+      GetDoubleArg(args, "x", 0.5)));
+  const double normalized_y = std::max(0.0, std::min(1.0,
+      GetDoubleArg(args, "y", 0.5)));
+  const int screen = DefaultScreen(display);
+  const int x = static_cast<int>(std::round(normalized_x *
+      std::max(0, DisplayWidth(display, screen) - 1)));
+  const int y = static_cast<int>(std::round(normalized_y *
+      std::max(0, DisplayHeight(display, screen) - 1)));
+  XWarpPointer(display, None, DefaultRootWindow(display), 0, 0, 0, 0, x, y);
+
+  const std::string action = GetStringArg(args, "action", "move");
+  const int requested_button = GetIntArg(args, "button", 0);
+  const unsigned int button = requested_button >= 1 && requested_button <= 3
+      ? static_cast<unsigned int>(requested_button) : 1;
+  if (action == "down") {
+    XTestFakeButtonEvent(display, button, True, CurrentTime);
+  } else if (action == "up") {
+    XTestFakeButtonEvent(display, button, False, CurrentTime);
+  } else if (action == "click") {
+    XTestFakeButtonEvent(display, button, True, CurrentTime);
+    XTestFakeButtonEvent(display, button, False, CurrentTime);
+  } else if (action == "scroll") {
+    const unsigned int scroll_button = GetIntArg(args, "delta", 0) >= 0 ? 4 : 5;
+    XTestFakeButtonEvent(display, scroll_button, True, CurrentTime);
+    XTestFakeButtonEvent(display, scroll_button, False, CurrentTime);
+  }
+  XFlush(display);
+  XCloseDisplay(display);
+  return "";
+#else
+  (void)args;
+  return "This Linux build does not include X11 remote mouse support.";
+#endif
+}
+
 void HandleMethodCall(FlMethodCall* method_call, gpointer user_data) {
   (void)user_data;
   const gchar* method = fl_method_call_get_name(method_call);
@@ -279,6 +358,17 @@ void HandleMethodCall(FlMethodCall* method_call, gpointer user_data) {
     g_autoptr(FlValue) result =
         fl_value_new_int(static_cast<int64_t>(GetSystemIdleSeconds()));
     fl_method_call_respond_success(method_call, result, nullptr);
+    return;
+  }
+
+  if (strcmp(method, "injectRemoteMouse") == 0) {
+    const std::string error = InjectRemoteMouse(args);
+    if (error.empty()) {
+      fl_method_call_respond_success(method_call, nullptr, nullptr);
+    } else {
+      fl_method_call_respond_error(method_call, "remote_mouse_unavailable",
+                                   error.c_str(), nullptr, nullptr);
+    }
     return;
   }
 

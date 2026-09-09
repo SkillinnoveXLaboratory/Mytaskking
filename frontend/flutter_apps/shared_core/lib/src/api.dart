@@ -1145,15 +1145,19 @@ extension BestieApiExt on BestieApi {
   Future<Map<String, dynamic>> remoteControlSessions() =>
       get('/remote-control/sessions');
 
-  Future<Map<String, dynamic>> remoteComputers() =>
-      get('/remote-control/computers');
+  Future<Map<String, dynamic>> remoteComputers({String? platform}) =>
+      get('/remote-control/computers', query: {
+        if (platform != null) 'platform': platform,
+      });
 
   Future<Map<String, dynamic>> registerRemoteComputer({
     required String computerId,
     String? computerName,
+    String platform = 'WINDOWS',
   }) => post('/remote-control/register', body: {
         'computerId': computerId,
         if (computerName != null) 'computerName': computerName,
+        'platform': platform,
       });
 
   Future<Map<String, dynamic>> renameRemoteComputer({

@@ -42,4 +42,24 @@ class DesktopNative {
     }
     return files;
   }
+
+  /// Injects one approved remote mouse action on an X11 desktop. Wayland
+  /// deliberately blocks synthetic input, so the native host reports that
+  /// limitation rather than bypassing the desktop security model.
+  static Future<void> injectRemoteMouse({
+    required double x,
+    required double y,
+    required String action,
+    int button = 0,
+    int delta = 0,
+  }) async {
+    if (!isSupported) throw UnsupportedError('Remote mouse is Linux-only.');
+    await _channel.invokeMethod<void>('injectRemoteMouse', {
+      'x': x.clamp(0, 1),
+      'y': y.clamp(0, 1),
+      'action': action,
+      'button': button,
+      'delta': delta,
+    });
+  }
 }

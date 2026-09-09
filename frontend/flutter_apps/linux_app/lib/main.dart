@@ -16,6 +16,7 @@ import 'package:mytaskking_mobile/windows_workspace.dart';
 import 'package:mytaskking_mobile/branding.dart';
 import 'package:mytaskking_mobile/mobile_appearance_providers.dart';
 import 'package:mytaskking_mobile/mobile_local_settings.dart';
+import 'live_desk_screen.dart';
 import 'package:mytaskking_mobile/mobile_theme_palettes.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
@@ -24,6 +25,7 @@ import 'desktop_local_settings.dart';
 import 'desktop_profile_screen.dart';
 import 'desktop_runtime.dart';
 import 'desktop_work_activity_agent.dart';
+import 'remote_control_overlay.dart';
 
 /// Desktop home after login — chat-first workspace for every role.
 String _desktopHomeRoute(BestieUser? user) => '/chat';
@@ -188,6 +190,10 @@ class _BestieLinuxAppState extends ConsumerState<BestieLinuxApp> {
             GoRoute(
               path: '/profile',
               builder: (_, __) => const DesktopProfileScreen(),
+            ),
+            GoRoute(
+              path: '/live-desk',
+              builder: (_, __) => const LiveDeskScreen(),
             ),
           ],
         ),
@@ -597,6 +603,11 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
         label: 'Profile',
         route: '/profile',
       ),
+      BestieSidebarItem(
+        icon: Icons.desktop_windows_outlined,
+        label: 'Live Desk',
+        route: '/live-desk',
+      ),
     ];
   }
 
@@ -608,6 +619,7 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
       return '/chat';
     }
     if (path.startsWith('/profile')) return '/profile';
+    if (path.startsWith('/live-desk')) return '/live-desk';
     return '/chat';
   }
 
@@ -763,7 +775,7 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
                         duration: BestieMotion.base,
                         child: KeyedSubtree(
                           key: ValueKey(activeRoute),
-                          child: widget.child,
+                          child: RemoteControlOverlay(child: widget.child),
                         ),
                       ),
                     ),

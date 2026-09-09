@@ -14,8 +14,8 @@ class LiveDeskScreen extends ConsumerStatefulWidget {
 
 class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
   final _connectComputerId = TextEditingController();
-  final _computerId = TextEditingController(text: 'MTK-TEST-001');
-  final _computerName = TextEditingController(text: 'My Laptop');
+  final _computerId = TextEditingController(text: 'MTK-LINUX-001');
+  final _computerName = TextEditingController(text: 'My Linux PC');
   final _computerNameFocus = FocusNode();
   Timer? _refresh;
   List<Map<String, dynamic>> _sessions = [];
@@ -44,7 +44,7 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
     try {
       final results = await Future.wait([
         ref.read(apiProvider).remoteControlSessions(),
-        ref.read(apiProvider).remoteComputers(platform: 'WINDOWS'),
+        ref.read(apiProvider).remoteComputers(platform: 'LINUX'),
       ]);
       final sessionData = results[0];
       final computerData = results[1];
@@ -92,7 +92,7 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
         () => ref.read(apiProvider).registerRemoteComputer(
               computerId: _computerId.text.trim(),
               computerName: _computerName.text.trim(),
-              platform: 'WINDOWS',
+              platform: 'LINUX',
             ),
       );
     }
@@ -132,7 +132,7 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Connect to an approved MyTaskKing Windows computer. Remote control is never enabled without host approval.',
+              'Connect to an approved MyTaskKing Linux or Windows computer. Remote control is never enabled without host approval.',
               style: theme.textTheme.bodyLarge,
             ),
             const SizedBox(height: 28),
@@ -182,7 +182,7 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
             const SizedBox(height: 20),
             if (_error != null)
               Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
-            Text('My Windows host', style: theme.textTheme.titleLarge),
+            Text('My Linux host', style: theme.textTheme.titleLarge),
             const SizedBox(height: 8),
             Card(
               child: Padding(
@@ -196,8 +196,8 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
                       Expanded(
                         child: Text(
                           _hostComputer == null
-                              ? 'Register this Windows computer as a host.'
-                              : 'This Windows computer is ready for Live Desk.',
+                              ? 'Register this Linux computer as a host.'
+                              : 'This Linux computer is ready for Live Desk.',
                           style: theme.textTheme.titleMedium,
                         ),
                       ),
@@ -296,7 +296,7 @@ class _SessionCard extends StatelessWidget {
           color: active ? Colors.red : null,
         ),
         title: Text(
-          '${session['computerName'] ?? 'Windows computer'} (${session['computerId'] ?? ''})',
+          '${session['computerName'] ?? 'Linux computer'} (${session['computerId'] ?? ''})',
         ),
         subtitle: Text('Status: $status'),
         trailing: Row(

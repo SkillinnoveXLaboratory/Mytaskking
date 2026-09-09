@@ -1195,6 +1195,7 @@ model RemoteComputer {
   hostUserId   String
   hostUser     User     @relation("RemoteComputerHost", fields: [hostUserId], references: [id], onDelete: Cascade)
   tenantId     String   @default("default")
+  platform     String   @default("WINDOWS")
   lastSeenAt   DateTime @default(now())
   sessions     RemoteControlSession[]
   createdAt    DateTime @default(now())
@@ -1202,6 +1203,7 @@ model RemoteComputer {
 
   @@unique([tenantId, computerId])
   @@index([hostUserId, tenantId])
+  @@index([hostUserId, tenantId, platform])
 }
 
 model RemoteControlSession {

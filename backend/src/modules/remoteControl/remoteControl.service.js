@@ -14,6 +14,7 @@ function publicComputer(computer) {
     computerName: computer.computerName,
     hostUserId: computer.hostUserId,
     tenantId: computer.tenantId,
+    platform: computer.platform,
     lastSeenAt: computer.lastSeenAt,
     createdAt: computer.createdAt,
     updatedAt: computer.updatedAt,
@@ -35,15 +36,15 @@ function publicSession(session) {
   };
 }
 
-async function listComputers(hostUserId, tenantId) {
+async function listComputers(hostUserId, tenantId, platform) {
   const computers = await prisma.remoteComputer.findMany({
-    where: { hostUserId, tenantId },
+    where: { hostUserId, tenantId, ...(platform ? { platform } : {}) },
     orderBy: { updatedAt: 'desc' },
   });
   return computers.map(publicComputer);
 }
 
-async function registerComputer({ computerId, computerName, hostUserId, tenantId }) {
+async function registerComputer({ computerId, computerName, platform, hostUserId, tenantId }) {
   const normalizedId = idForComputer(computerId);
   if (!normalizedId) throw BadRequest('computerId is required');
 
@@ -61,9 +62,11 @@ async function registerComputer({ computerId, computerName, hostUserId, tenantId
       computerName: computerName || 'Windows computer',
       hostUserId,
       tenantId,
+      platform,
     },
     update: {
       computerName: computerName || undefined,
+      platform,
       lastSeenAt: new Date(),
     },
   });
@@ -145,6 +148,18 @@ async function stop(id, userId) {
   return publicSession(session);
 }
 
+async function canUse(id, userId, status = 'ACTIVE') {
+  const session = await prisma.remoteControlSession.findFirst({
+    where: {
+      id,
+      status,
+      OR: [{ hostUserId: userId }, { controllerUserId: userId }],
+    },
+    select: { id: true },
+  });
+  return session !== null;
+}
+
 async function listForUser(userId, tenantId) {
   const sessions = await prisma.remoteControlSession.findMany({
     where: {
@@ -165,5 +180,6 @@ module.exports = {
   requestSession,
   approve,
   stop,
+  canUse,
   listForUser,
 };

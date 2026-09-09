@@ -23,6 +23,7 @@ add_definitions(-DAPPLICATION_ID="${APPLICATION_ID}")
 # Add dependency libraries. Add any application-specific dependencies here.
 pkg_check_modules(X11 IMPORTED_TARGET x11)
 pkg_check_modules(XSS IMPORTED_TARGET xscrnsaver)
+pkg_check_modules(XTST REQUIRED IMPORTED_TARGET xtst)
 
 target_link_libraries(${BINARY_NAME} PRIVATE flutter)
 target_link_libraries(${BINARY_NAME} PRIVATE PkgConfig::GTK)
@@ -32,5 +33,6 @@ endif()
 if(TARGET PkgConfig::XSS)
   target_link_libraries(${BINARY_NAME} PRIVATE PkgConfig::XSS)
 endif()
+target_link_libraries(${BINARY_NAME} PRIVATE PkgConfig::XTST)
 
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
