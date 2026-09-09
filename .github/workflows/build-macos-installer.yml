@@ -1,0 +1,43 @@
+name: Build macOS Installer
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/build-macos-installer.yml"
+      - "frontend/flutter_apps/macos_app/**"
+      - "frontend/flutter_apps/mobile_app/**"
+      - "frontend/flutter_apps/shared_core/**"
+      - "frontend/flutter_apps/shared_design_system/**"
+
+jobs:
+  build-macos-installer:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: frontend/flutter_apps/macos_app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Build unsigned macOS installer
+        shell: bash
+        run: bash ./build_macos.sh
+
+      - name: Upload macOS installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: mytaskking-macos-installer
+          path: |
+            frontend/flutter_apps/macos_app/dist/*.dmg
+            frontend/flutter_apps/macos_app/dist/*.zip
+          if-no-files-found: error

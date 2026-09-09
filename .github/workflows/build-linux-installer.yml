@@ -1,16 +1,9 @@
 name: Build Linux Installer
 
 on:
+  # Linux releases are paused while macOS packaging is being validated.
+  # Keep manual dispatch available for an intentional Linux release.
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/build-linux-installer.yml"
-      - "frontend/flutter_apps/linux_app/**"
-      - "frontend/flutter_apps/mobile_app/**"
-      - "frontend/flutter_apps/shared_core/**"
-      - "frontend/flutter_apps/shared_design_system/**"
 
 jobs:
   build-linux-installer:
