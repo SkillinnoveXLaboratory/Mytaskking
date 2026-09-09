@@ -16,12 +16,8 @@ final class MytaskkingDesktopPlugin {
     case "showWorkActivityPrompt":
       let args = call.arguments as? [String: Any]
       let seconds = (args?["seconds"] as? Int) ?? 30
-      if Thread.isMainThread {
-        result(Self.showWorkActivityPrompt(seconds: seconds))
-      } else {
-        DispatchQueue.main.sync {
-          result(Self.showWorkActivityPrompt(seconds: seconds))
-        }
+      Self.showWorkActivityPrompt(seconds: seconds) { note in
+        result(note)
       }
     case "getIdleSeconds":
       let anyInput = CGEventType(rawValue: ~0)!
@@ -52,19 +48,19 @@ final class MytaskkingDesktopPlugin {
     }
   }
 
-  private static func showWorkActivityPrompt(seconds: Int) -> String {
-    var response = "working"
-    var finished = false
-    let panel = WorkActivityPromptPanel(seconds: max(seconds, 1)) { note in
-      response = note.isEmpty ? "working" : note
-      finished = true
+  private static var activePromptPanel: WorkActivityPromptPanel?
+
+  private static func showWorkActivityPrompt(seconds: Int, completion: @escaping (String) -> Void) {
+    DispatchQueue.main.async {
+      activePromptPanel?.close()
+      let panel = WorkActivityPromptPanel(seconds: max(seconds, 1)) { note in
+        activePromptPanel = nil
+        completion(note.isEmpty ? "working" : note)
+      }
+      activePromptPanel = panel
+      panel.makeKeyAndOrderFront(nil)
+      NSApp.activate(ignoringOtherApps: true)
     }
-    panel.makeKeyAndOrderFront(nil)
-    NSApp.activate(ignoringOtherApps: true)
-    while !finished {
-      RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
-    }
-    return response
   }
 
   private static func captureFrames(
@@ -208,6 +204,9 @@ final class MytaskkingDesktopPlugin {
 }
 
 private final class WorkActivityPromptPanel: NSPanel, NSTextFieldDelegate, NSWindowDelegate {
+  override var canBecomeKey: Bool { return true }
+  override var canBecomeMain: Bool { return true }
+
   private var remaining: Int
   private var needsNote = false
   private var completed = false
@@ -244,8 +243,12 @@ private final class WorkActivityPromptPanel: NSPanel, NSTextFieldDelegate, NSWin
     messageLabel.maximumNumberOfLines = 0
     contentView?.addSubview(messageLabel)
 
-    entry.frame = NSRect(x: 20, y: 80, width: 390, height: 24)
+    entry.frame = NSRect(x: 20, y: 80, width: 390, height: 26)
     entry.placeholderString = "What are you working on?"
+    entry.isEditable = true
+    entry.isSelectable = true
+    entry.target = self
+    entry.action = #selector(submitTapped)
     entry.isHidden = true
     entry.delegate = self
     contentView?.addSubview(entry)
@@ -282,7 +285,8 @@ private final class WorkActivityPromptPanel: NSPanel, NSTextFieldDelegate, NSWin
       entry.isHidden = false
       workingButton.isHidden = true
       submitButton.isHidden = false
-      window?.makeFirstResponder(entry)
+      makeKeyAndOrderFront(nil)
+      makeFirstResponder(entry)
     }
     updateMessage()
   }
@@ -292,7 +296,8 @@ private final class WorkActivityPromptPanel: NSPanel, NSTextFieldDelegate, NSWin
   }
 
   @objc private func submitTapped() {
-    finish(note: entry.stringValue)
+    let note = entry.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    finish(note: note.isEmpty ? "working" : note)
   }
 
   func windowShouldClose(_ sender: NSWindow) -> Bool {
