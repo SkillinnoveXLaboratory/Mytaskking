@@ -9,6 +9,10 @@ class FlutterTts {
 
   Future<bool> setVolume(double volume) async => true;
 
+  Future<dynamic> setVoice(Map<String, String> voice) async => true;
+
+  Future<dynamic> get getVoices async => <dynamic>[];
+
   Future<dynamic> speak(String text) async => true;
 
   Future<dynamic> stop() async => true;
