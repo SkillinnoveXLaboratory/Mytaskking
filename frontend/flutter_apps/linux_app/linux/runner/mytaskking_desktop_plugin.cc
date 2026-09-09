@@ -328,7 +328,9 @@ std::string InjectRemoteMouse(FlValue* args) {
 #endif
 }
 
-void HandleMethodCall(FlMethodCall* method_call, gpointer user_data) {
+void HandleMethodCall(FlMethodChannel* channel, FlMethodCall* method_call,
+                      gpointer user_data) {
+  (void)channel;
   (void)user_data;
   const gchar* method = fl_method_call_get_name(method_call);
   FlValue* args = fl_method_call_get_args(method_call);
