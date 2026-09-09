@@ -39,6 +39,7 @@ jobs:
             libxss-dev \
             libxtst-dev \
             liblzma-dev \
+            libpulse-dev \
             libsecret-1-dev \
             libunwind-dev
 
@@ -92,7 +93,7 @@ jobs:
           Priority: optional
           Architecture: amd64
           Maintainer: MyTaskKing <support@mytaskking.com>
-          Depends: libgtk-3-0, libglib2.0-0, libstdc++6, liblzma5, libunwind8, libxtst6, libsecret-1-0
+          Depends: libgtk-3-0, libglib2.0-0, libstdc++6, liblzma5, libunwind8, libxtst6, libsecret-1-0, libpulse0
           Description: MyTaskKing desktop workspace
            MyTaskKing provides chat, tasks, calls, meetings, and work tools.
           EOF
