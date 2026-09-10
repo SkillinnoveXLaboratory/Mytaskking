@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:mytaskking_core/mytaskking_core.dart';
 import 'package:mytaskking_mobile/live_desk/remote_desktop_session.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LiveDeskScreen extends ConsumerStatefulWidget {
   const LiveDeskScreen({super.key});
@@ -16,7 +18,7 @@ class LiveDeskScreen extends ConsumerStatefulWidget {
 
 class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
   final _connectComputerId = TextEditingController();
-  final _computerId = TextEditingController(text: 'MTK-TEST-001');
+  final _computerId = TextEditingController();
   final _computerName = TextEditingController(text: 'My Laptop');
   final _computerNameFocus = FocusNode();
   Timer? _refresh;
@@ -30,10 +32,15 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
   VoidCallback? _offApproved;
   VoidCallback? _offStopped;
   bool _rendererReady = false;
+  late final Future<String> _localComputerIdFuture;
+
+  static const _computerIdStoragePrefix = 'live_desk.windows.computer_id.';
+  static const _idAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
   @override
   void initState() {
     super.initState();
+    _localComputerIdFuture = _localComputerId();
     _desktopStream = RemoteDesktopSession(ref.read(realtimeProvider));
     _desktopStream.remoteStream.addListener(_bindRemoteStream);
     unawaited(_initializeRenderer());
@@ -87,7 +94,8 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
     } catch (e) {
       if (mounted) {
         setState(
-            () => _error = 'Could not initialize the live-screen viewer: $e');
+          () => _error = 'Could not initialize the live-screen viewer: $e',
+        );
       }
     }
   }
@@ -125,6 +133,7 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
 
   Future<void> _load() async {
     try {
+      final localComputerId = await _localComputerIdFuture;
       final results = await Future.wait([
         ref.read(apiProvider).remoteControlSessions(),
         ref.read(apiProvider).remoteComputers(platform: 'WINDOWS'),
@@ -140,6 +149,8 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
       if (host != null && !_computerNameFocus.hasFocus) {
         _computerId.text = '${host['computerId'] ?? ''}';
         _computerName.text = '${host['computerName'] ?? ''}';
+      } else if (_computerId.text.isEmpty) {
+        _computerId.text = localComputerId;
       }
       setState(() {
         _sessions = ((sessionData['items'] as List?) ?? const [])
@@ -151,6 +162,22 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     }
+  }
+
+  Future<String> _localComputerId() async {
+    final userId = ref.read(authStoreProvider).user?.id ?? 'anonymous';
+    final key = '$_computerIdStoragePrefix$userId';
+    final prefs = await SharedPreferences.getInstance();
+    final existing = prefs.getString(key);
+    if (existing != null && existing.isNotEmpty) return existing;
+    final random = Random.secure();
+    final suffix = List.generate(
+      10,
+      (_) => _idAlphabet[random.nextInt(_idAlphabet.length)],
+    ).join();
+    final id = 'MTK-WIN-$suffix';
+    await prefs.setString(key, id);
+    return id;
   }
 
   Future<void> _run(Future<Map<String, dynamic>> Function() action) async {
@@ -172,7 +199,9 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
     final host = _hostComputer;
     if (host == null) {
       return _run(
-        () => ref.read(apiProvider).registerRemoteComputer(
+        () => ref
+            .read(apiProvider)
+            .registerRemoteComputer(
               computerId: _computerId.text.trim(),
               computerName: _computerName.text.trim(),
               platform: 'WINDOWS',
@@ -180,7 +209,9 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
       );
     }
     return _run(
-      () => ref.read(apiProvider).renameRemoteComputer(
+      () => ref
+          .read(apiProvider)
+          .renameRemoteComputer(
             computerRecordId: '${host['id']}',
             computerName: _computerName.text.trim(),
           ),
@@ -192,9 +223,8 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
     if (id.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: id));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Computer ID copied.')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Computer ID copied.')));
   }
 
   @override
@@ -247,13 +277,13 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
                           onPressed: _busy
                               ? null
                               : () => _run(
-                                    () => ref
-                                        .read(apiProvider)
-                                        .requestRemoteControl(
-                                          computerId:
-                                              _connectComputerId.text.trim(),
-                                        ),
-                                  ),
+                                  () => ref
+                                      .read(apiProvider)
+                                      .requestRemoteControl(
+                                        computerId: _connectComputerId.text
+                                            .trim(),
+                                      ),
+                                ),
                           icon: const Icon(Icons.send),
                           label: const Text('Request access'),
                         ),
@@ -312,54 +342,63 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(children: [
-                      const Icon(Icons.computer, size: 34),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Text(
-                          _hostComputer == null
-                              ? 'Register this Windows computer as a host.'
-                              : 'This Windows computer is ready for Live Desk.',
-                          style: theme.textTheme.titleMedium,
+                    Row(
+                      children: [
+                        const Icon(Icons.computer, size: 34),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Text(
+                            _hostComputer == null
+                                ? 'Register this Windows computer as a host.'
+                                : 'This Windows computer is ready for Live Desk.',
+                            style: theme.textTheme.titleMedium,
+                          ),
                         ),
-                      ),
-                    ]),
+                      ],
+                    ),
                     const SizedBox(height: 14),
                     Text('Computer ID', style: theme.textTheme.labelLarge),
                     const SizedBox(height: 4),
-                    Row(children: [
-                      Expanded(
-                        child: SelectableText(
-                          _computerId.text,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SelectableText(
+                            _computerId.text,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
-                      ),
-                      IconButton(
-                        tooltip: 'Copy computer ID',
-                        onPressed: _copyComputerId,
-                        icon: const Icon(Icons.copy_outlined),
-                      ),
-                    ]),
+                        IconButton(
+                          tooltip: 'Copy computer ID',
+                          onPressed: _copyComputerId,
+                          icon: const Icon(Icons.copy_outlined),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 12),
-                    Row(children: [
-                      Expanded(
+                    Row(
+                      children: [
+                        Expanded(
                           child: TextField(
-                        controller: _computerName,
-                        focusNode: _computerNameFocus,
-                        decoration: const InputDecoration(
-                          labelText: 'Computer name',
+                            controller: _computerName,
+                            focusNode: _computerNameFocus,
+                            decoration: const InputDecoration(
+                              labelText: 'Computer name',
+                            ),
+                          ),
                         ),
-                      )),
-                      const SizedBox(width: 12),
-                      FilledButton(
-                        onPressed: _busy ? null : _saveHost,
-                        child: Text(
-                          _hostComputer == null ? 'Register host' : 'Save name',
+                        const SizedBox(width: 12),
+                        FilledButton(
+                          onPressed: _busy ? null : _saveHost,
+                          child: Text(
+                            _hostComputer == null
+                                ? 'Register host'
+                                : 'Save name',
+                          ),
                         ),
-                      ),
-                    ]),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -432,8 +471,7 @@ class _SessionCard extends StatelessWidget {
                 onPressed: busy ? null : onApprove,
                 child: const Text('Approve'),
               ),
-            if (pending && !canApprove)
-              const Text('Waiting for host approval'),
+            if (pending && !canApprove) const Text('Waiting for host approval'),
             if (active)
               OutlinedButton(
                 onPressed: busy ? null : onStop,

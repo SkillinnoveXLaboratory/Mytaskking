@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mytaskking_core/mytaskking_core.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LiveDeskScreen extends ConsumerStatefulWidget {
   const LiveDeskScreen({super.key});
@@ -14,7 +16,7 @@ class LiveDeskScreen extends ConsumerStatefulWidget {
 
 class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
   final _connectComputerId = TextEditingController();
-  final _computerId = TextEditingController(text: 'MTK-MAC-001');
+  final _computerId = TextEditingController();
   final _computerName = TextEditingController(text: 'My Mac');
   final _computerNameFocus = FocusNode();
   Timer? _refresh;
@@ -22,10 +24,15 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
   Map<String, dynamic>? _hostComputer;
   bool _busy = false;
   String? _error;
+  late final Future<String> _localComputerIdFuture;
+
+  static const _computerIdStoragePrefix = 'live_desk.macos.computer_id.';
+  static const _idAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
   @override
   void initState() {
     super.initState();
+    _localComputerIdFuture = _localComputerId();
     _load();
     _refresh = Timer.periodic(const Duration(seconds: 8), (_) => _load());
   }
@@ -42,6 +49,7 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
 
   Future<void> _load() async {
     try {
+      final localComputerId = await _localComputerIdFuture;
       final results = await Future.wait([
         ref.read(apiProvider).remoteControlSessions(),
         ref.read(apiProvider).remoteComputers(platform: 'MACOS'),
@@ -57,6 +65,8 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
       if (host != null && !_computerNameFocus.hasFocus) {
         _computerId.text = '${host['computerId'] ?? ''}';
         _computerName.text = '${host['computerName'] ?? ''}';
+      } else if (_computerId.text.isEmpty) {
+        _computerId.text = localComputerId;
       }
       setState(() {
         _sessions = ((sessionData['items'] as List?) ?? const [])
@@ -68,6 +78,22 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     }
+  }
+
+  Future<String> _localComputerId() async {
+    final userId = ref.read(authStoreProvider).user?.id ?? 'anonymous';
+    final key = '$_computerIdStoragePrefix$userId';
+    final prefs = await SharedPreferences.getInstance();
+    final existing = prefs.getString(key);
+    if (existing != null && existing.isNotEmpty) return existing;
+    final random = Random.secure();
+    final suffix = List.generate(
+      10,
+      (_) => _idAlphabet[random.nextInt(_idAlphabet.length)],
+    ).join();
+    final id = 'MTK-MAC-$suffix';
+    await prefs.setString(key, id);
+    return id;
   }
 
   Future<void> _run(Future<Map<String, dynamic>> Function() action) async {
