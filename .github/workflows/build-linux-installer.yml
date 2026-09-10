@@ -1,8 +1,7 @@
 name: Build Linux Installer
 
 on:
-  # Linux releases are paused while macOS packaging is being validated.
-  # Keep manual dispatch available for an intentional Linux release.
+  # Paused: run only manually from the Actions tab.
   workflow_dispatch:
 
 jobs:

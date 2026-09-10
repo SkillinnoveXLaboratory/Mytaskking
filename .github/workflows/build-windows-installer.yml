@@ -1,9 +1,16 @@
 name: Build Windows Installer
 
 on:
-  # Windows builds are paused while the Linux installer is being validated.
-  # Keep manual dispatch available for an intentional Windows release.
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/build-windows-installer.yml"
+      - "frontend/flutter_apps/windows_app/**"
+      - "frontend/flutter_apps/mobile_app/**"
+      - "frontend/flutter_apps/shared_core/**"
+      - "frontend/flutter_apps/shared_design_system/**"
 
 jobs:
   build-windows-installer:

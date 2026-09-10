@@ -7,15 +7,6 @@ on:
         description: "Optional release tag, for example v1.0.0. Leave blank to build an artifact only."
         required: false
         type: string
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/build-macos-installer.yml"
-      - "frontend/flutter_apps/macos_app/**"
-      - "frontend/flutter_apps/mobile_app/**"
-      - "frontend/flutter_apps/shared_core/**"
-      - "frontend/flutter_apps/shared_design_system/**"
 
 jobs:
   build-macos-installer:
