@@ -52,7 +52,9 @@ class _RemoteControlOverlayState extends ConsumerState<RemoteControlOverlay> {
 
   @override
   void dispose() {
-    for (final fn in _cleanup) fn();
+    for (final fn in _cleanup) {
+      fn();
+    }
     super.dispose();
   }
 
@@ -132,7 +134,7 @@ class _RemoteControlOverlayState extends ConsumerState<RemoteControlOverlay> {
                         Text('Remote-control request',
                             style: Theme.of(context).textTheme.titleMedium),
                         const SizedBox(height: 6),
-                        Text(
+                        const Text(
                             'A controller wants to view and control this computer.'),
                         const SizedBox(height: 14),
                         Row(mainAxisSize: MainAxisSize.min, children: [

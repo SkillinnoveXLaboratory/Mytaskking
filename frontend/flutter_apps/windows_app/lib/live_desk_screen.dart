@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:mytaskking_core/mytaskking_core.dart';
+import 'package:mytaskking_mobile/live_desk/remote_desktop_session.dart';
 
 class LiveDeskScreen extends ConsumerStatefulWidget {
   const LiveDeskScreen({super.key});
@@ -22,10 +24,32 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
   Map<String, dynamic>? _hostComputer;
   bool _busy = false;
   String? _error;
+  Map<String, dynamic>? _viewingSession;
+  late final RemoteDesktopSession _desktopStream;
+  final RTCVideoRenderer _renderer = RTCVideoRenderer();
+  VoidCallback? _offApproved;
+  VoidCallback? _offStopped;
+  bool _rendererReady = false;
 
   @override
   void initState() {
     super.initState();
+    _desktopStream = RemoteDesktopSession(ref.read(realtimeProvider));
+    _desktopStream.remoteStream.addListener(_bindRemoteStream);
+    unawaited(_initializeRenderer());
+    final rt = ref.read(realtimeProvider);
+    _offApproved = rt.onAny('remote.approved', ([data]) {
+      if (data is! Map) return;
+      final session = data.cast<String, dynamic>();
+      unawaited(_startViewing(session));
+    });
+    _offStopped = rt.onAny('remote.stopped', ([data]) {
+      if (data is! Map ||
+          data['id']?.toString() != _viewingSession?['id']?.toString()) {
+        return;
+      }
+      unawaited(_stopViewing());
+    });
     _load();
     _refresh = Timer.periodic(const Duration(seconds: 8), (_) => _load());
   }
@@ -33,11 +57,70 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
   @override
   void dispose() {
     _refresh?.cancel();
+    _offApproved?.call();
+    _offStopped?.call();
+    _desktopStream.remoteStream.removeListener(_bindRemoteStream);
+    unawaited(_desktopStream.dispose());
+    unawaited(_renderer.dispose());
     _connectComputerId.dispose();
     _computerId.dispose();
     _computerName.dispose();
     _computerNameFocus.dispose();
     super.dispose();
+  }
+
+  void _bindRemoteStream() {
+    if (!_rendererReady) return;
+    _renderer.srcObject = _desktopStream.remoteStream.value;
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _initializeRenderer() async {
+    try {
+      await _renderer.initialize();
+      if (!mounted) {
+        await _renderer.dispose();
+        return;
+      }
+      _rendererReady = true;
+      _bindRemoteStream();
+    } catch (e) {
+      if (mounted) {
+        setState(
+            () => _error = 'Could not initialize the live-screen viewer: $e');
+      }
+    }
+  }
+
+  Future<void> _startViewing(Map<String, dynamic> session) async {
+    setState(() {
+      _viewingSession = session;
+      _error = null;
+    });
+    try {
+      await _desktopStream.startViewing('${session['id']}');
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Could not start live stream: $e');
+    }
+  }
+
+  Future<void> _stopViewing() async {
+    await _desktopStream.dispose();
+    if (_rendererReady) _renderer.srcObject = null;
+    if (mounted) setState(() => _viewingSession = null);
+  }
+
+  void _sendMouse(Offset localPosition, Size size, String action) {
+    final sessionId = _viewingSession?['id']?.toString();
+    if (sessionId == null || size.isEmpty) return;
+    ref.read(realtimeProvider).emit('remote.mouse', {
+      'sessionId': sessionId,
+      'x': (localPosition.dx / size.width).clamp(0.0, 1.0),
+      'y': (localPosition.dy / size.height).clamp(0.0, 1.0),
+      'action': action,
+      'button': 0,
+    });
   }
 
   Future<void> _load() async {
@@ -182,6 +265,44 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
             const SizedBox(height: 20),
             if (_error != null)
               Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
+            if (_viewingSession != null) ...[
+              const SizedBox(height: 20),
+              Text('Live screen', style: theme.textTheme.titleLarge),
+              const SizedBox(height: 8),
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Card(
+                  clipBehavior: Clip.antiAlias,
+                  color: Colors.black,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) => GestureDetector(
+                      onTapDown: (details) => _sendMouse(
+                        details.localPosition,
+                        Size(constraints.maxWidth, constraints.maxHeight),
+                        'click',
+                      ),
+                      onPanUpdate: (details) => _sendMouse(
+                        details.localPosition,
+                        Size(constraints.maxWidth, constraints.maxHeight),
+                        'move',
+                      ),
+                      child: _renderer.srcObject == null
+                          ? const Center(
+                              child: Text(
+                                'Waiting for the approved Mac to share its screen...',
+                                style: TextStyle(color: Colors.white),
+                              ),
+                            )
+                          : RTCVideoView(
+                              _renderer,
+                              objectFit: RTCVideoViewObjectFit
+                                  .RTCVideoViewObjectFitContain,
+                            ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
             Text('My Windows host', style: theme.textTheme.titleLarge),
             const SizedBox(height: 8),
             Card(

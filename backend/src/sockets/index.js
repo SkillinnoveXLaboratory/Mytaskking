@@ -176,6 +176,13 @@ module.exports = function initSockets(server) {
       if (!await remoteControl.canUse(sessionId, userId)) return;
       socket.to(`remote:${sessionId}`).emit('remote.signal', { sessionId, from: userId, payload });
     });
+    // The controller acknowledges its room join before the host emits an SDP
+    // offer. Socket.IO rooms are not durable, so this avoids losing the first
+    // offer when an approved session is opened on two devices simultaneously.
+    socket.on('remote.viewer-ready', async ({ sessionId }) => {
+      if (!await remoteControl.canUse(sessionId, userId)) return;
+      socket.to(`remote:${sessionId}`).emit('remote.viewer-ready', { sessionId, from: userId });
+    });
     socket.on('remote.mouse', async ({ sessionId, x, y, action, button, delta }) => {
       if (!await remoteControl.canUse(sessionId, userId)) return;
       socket.to(`remote:${sessionId}`).emit('remote.mouse', {
