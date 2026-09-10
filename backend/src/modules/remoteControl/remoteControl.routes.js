@@ -61,7 +61,9 @@ router.post('/request', validate({ body: Joi.object({
 router.post('/:id/approve', asyncHandler(async (req, res) => {
   const session = await service.approve(req.params.id, req.user.id);
   if (!session) return res.status(403).json({ error: 'Remote request is invalid or expired' });
-  req.app.get('io')?.to(`user:${session.controllerUserId}`).emit('remote.approved', session);
+  // Both parties need the active-session event: the controller initializes
+  // its viewer and the host starts its explicitly approved screen capture.
+  req.app.get('io')?.to(`user:${session.controllerUserId}`).to(`user:${session.hostUserId}`).emit('remote.approved', session);
   res.json(session);
 }));
 

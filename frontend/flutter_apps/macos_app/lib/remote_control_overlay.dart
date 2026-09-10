@@ -23,6 +23,7 @@ class _RemoteControlOverlayState extends ConsumerState<RemoteControlOverlay> {
   Map<String, dynamic>? _active;
   final List<VoidCallback> _cleanup = [];
   late final RemoteDesktopSession _desktopStream;
+  bool _startingHostStream = false;
 
   @override
   void initState() {
@@ -41,7 +42,12 @@ class _RemoteControlOverlayState extends ConsumerState<RemoteControlOverlay> {
     _cleanup.add(
       rt.onAny('remote.approved', ([data]) {
         if (!mounted || data is! Map) return;
-        setState(() => _active = data.cast<String, dynamic>());
+        final session = data.cast<String, dynamic>();
+        setState(() => _active = session);
+        if (session['hostUserId']?.toString() ==
+            ref.read(authStoreProvider).user?.id) {
+          unawaited(_startHosting(session));
+        }
       }),
     );
     _cleanup.add(
@@ -82,27 +88,33 @@ class _RemoteControlOverlayState extends ConsumerState<RemoteControlOverlay> {
     final pending = _pending;
     if (pending == null) return;
     try {
-      final session =
-          await ref.read(apiProvider).approveRemoteControl('${pending['id']}');
+      final session = await ref
+          .read(apiProvider)
+          .approveRemoteControl('${pending['id']}');
       if (mounted) {
         setState(() {
           _pending = null;
           _active = session;
         });
-        ref.read(realtimeProvider).emit('remote.join', {
-          'sessionId': session['id'],
-        });
-        try {
-          await _desktopStream.startHosting('${session['id']}');
-        } catch (_) {
-          // Screen Recording can be denied in macOS. End the server session so
-          // a controller never sees an active but blank remote-control state.
-          await ref.read(apiProvider).stopRemoteControl('${session['id']}');
-          if (mounted) setState(() => _active = null);
-        }
+        await _startHosting(session);
       }
     } catch (_) {
       if (mounted) setState(() => _pending = null);
+    }
+  }
+
+  Future<void> _startHosting(Map<String, dynamic> session) async {
+    if (_startingHostStream || _desktopStream.isStreaming) return;
+    _startingHostStream = true;
+    try {
+      await _desktopStream.startHosting('${session['id']}');
+    } catch (_) {
+      // Screen Recording can be denied in macOS. End the server session so a
+      // controller never sees an active but blank remote-control state.
+      await ref.read(apiProvider).stopRemoteControl('${session['id']}');
+      if (mounted) setState(() => _active = null);
+    } finally {
+      _startingHostStream = false;
     }
   }
 

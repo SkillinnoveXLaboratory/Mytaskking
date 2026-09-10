@@ -89,7 +89,9 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
     final host = _hostComputer;
     if (host == null) {
       return _run(
-        () => ref.read(apiProvider).registerRemoteComputer(
+        () => ref
+            .read(apiProvider)
+            .registerRemoteComputer(
               computerId: _computerId.text.trim(),
               computerName: _computerName.text.trim(),
               platform: 'MACOS',
@@ -97,7 +99,9 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
       );
     }
     return _run(
-      () => ref.read(apiProvider).renameRemoteComputer(
+      () => ref
+          .read(apiProvider)
+          .renameRemoteComputer(
             computerRecordId: '${host['id']}',
             computerName: _computerName.text.trim(),
           ),
@@ -109,14 +113,14 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
     if (id.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: id));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Computer ID copied.')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Computer ID copied.')));
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final currentUserId = ref.watch(authStoreProvider).user?.id;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(32),
       child: ConstrainedBox(
@@ -163,13 +167,13 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
                           onPressed: _busy
                               ? null
                               : () => _run(
-                                    () => ref
-                                        .read(apiProvider)
-                                        .requestRemoteControl(
-                                          computerId:
-                                              _connectComputerId.text.trim(),
-                                        ),
-                                  ),
+                                  () => ref
+                                      .read(apiProvider)
+                                      .requestRemoteControl(
+                                        computerId: _connectComputerId.text
+                                            .trim(),
+                                      ),
+                                ),
                           icon: const Icon(Icons.send),
                           label: const Text('Request access'),
                         ),
@@ -190,54 +194,63 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(children: [
-                      const Icon(Icons.computer, size: 34),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Text(
-                          _hostComputer == null
-                              ? 'Register this Mac as a host.'
-                              : 'This Mac is ready for Live Desk.',
-                          style: theme.textTheme.titleMedium,
+                    Row(
+                      children: [
+                        const Icon(Icons.computer, size: 34),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Text(
+                            _hostComputer == null
+                                ? 'Register this Mac as a host.'
+                                : 'This Mac is ready for Live Desk.',
+                            style: theme.textTheme.titleMedium,
+                          ),
                         ),
-                      ),
-                    ]),
+                      ],
+                    ),
                     const SizedBox(height: 14),
                     Text('Computer ID', style: theme.textTheme.labelLarge),
                     const SizedBox(height: 4),
-                    Row(children: [
-                      Expanded(
-                        child: SelectableText(
-                          _computerId.text,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SelectableText(
+                            _computerId.text,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
-                      ),
-                      IconButton(
-                        tooltip: 'Copy computer ID',
-                        onPressed: _copyComputerId,
-                        icon: const Icon(Icons.copy_outlined),
-                      ),
-                    ]),
+                        IconButton(
+                          tooltip: 'Copy computer ID',
+                          onPressed: _copyComputerId,
+                          icon: const Icon(Icons.copy_outlined),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 12),
-                    Row(children: [
-                      Expanded(
+                    Row(
+                      children: [
+                        Expanded(
                           child: TextField(
-                        controller: _computerName,
-                        focusNode: _computerNameFocus,
-                        decoration: const InputDecoration(
-                          labelText: 'Computer name',
+                            controller: _computerName,
+                            focusNode: _computerNameFocus,
+                            decoration: const InputDecoration(
+                              labelText: 'Computer name',
+                            ),
+                          ),
                         ),
-                      )),
-                      const SizedBox(width: 12),
-                      FilledButton(
-                        onPressed: _busy ? null : _saveHost,
-                        child: Text(
-                          _hostComputer == null ? 'Register host' : 'Save name',
+                        const SizedBox(width: 12),
+                        FilledButton(
+                          onPressed: _busy ? null : _saveHost,
+                          child: Text(
+                            _hostComputer == null
+                                ? 'Register host'
+                                : 'Save name',
+                          ),
                         ),
-                      ),
-                    ]),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -256,6 +269,7 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
               (s) => _SessionCard(
                 session: s,
                 busy: _busy,
+                canApprove: s['hostUserId']?.toString() == currentUserId,
                 onApprove: () => _run(
                   () =>
                       ref.read(apiProvider).approveRemoteControl('${s['id']}'),
@@ -275,11 +289,13 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
 class _SessionCard extends StatelessWidget {
   final Map<String, dynamic> session;
   final bool busy;
+  final bool canApprove;
   final VoidCallback onApprove;
   final VoidCallback onStop;
   const _SessionCard({
     required this.session,
     required this.busy,
+    required this.canApprove,
     required this.onApprove,
     required this.onStop,
   });
@@ -302,11 +318,12 @@ class _SessionCard extends StatelessWidget {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (pending)
+            if (pending && canApprove)
               FilledButton(
                 onPressed: busy ? null : onApprove,
                 child: const Text('Approve'),
               ),
+            if (pending && !canApprove) const Text('Waiting for host approval'),
             if (active)
               OutlinedButton(
                 onPressed: busy ? null : onStop,

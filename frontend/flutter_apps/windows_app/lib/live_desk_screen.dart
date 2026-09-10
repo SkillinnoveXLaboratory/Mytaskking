@@ -200,6 +200,7 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final currentUserId = ref.watch(authStoreProvider).user?.id;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(32),
       child: ConstrainedBox(
@@ -377,6 +378,7 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
               (s) => _SessionCard(
                 session: s,
                 busy: _busy,
+                canApprove: s['hostUserId']?.toString() == currentUserId,
                 onApprove: () => _run(
                   () =>
                       ref.read(apiProvider).approveRemoteControl('${s['id']}'),
@@ -396,11 +398,13 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
 class _SessionCard extends StatelessWidget {
   final Map<String, dynamic> session;
   final bool busy;
+  final bool canApprove;
   final VoidCallback onApprove;
   final VoidCallback onStop;
   const _SessionCard({
     required this.session,
     required this.busy,
+    required this.canApprove,
     required this.onApprove,
     required this.onStop,
   });
@@ -423,11 +427,13 @@ class _SessionCard extends StatelessWidget {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (pending)
+            if (pending && canApprove)
               FilledButton(
                 onPressed: busy ? null : onApprove,
                 child: const Text('Approve'),
               ),
+            if (pending && !canApprove)
+              const Text('Waiting for host approval'),
             if (active)
               OutlinedButton(
                 onPressed: busy ? null : onStop,
