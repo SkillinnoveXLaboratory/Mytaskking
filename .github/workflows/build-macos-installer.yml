@@ -2,6 +2,11 @@ name: Build macOS Installer
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Optional release tag, for example v1.0.0. Leave blank to build an artifact only."
+        required: false
+        type: string
   push:
     branches:
       - main
@@ -15,6 +20,8 @@ on:
 jobs:
   build-macos-installer:
     runs-on: macos-latest
+    permissions:
+      contents: write
     defaults:
       run:
         working-directory: frontend/flutter_apps/macos_app
@@ -41,3 +48,14 @@ jobs:
             frontend/flutter_apps/macos_app/dist/*.dmg
             frontend/flutter_apps/macos_app/dist/*.zip
           if-no-files-found: error
+
+      # GitHub Actions artifacts are always delivered as ZIP files. A release
+      # asset is the supported way to offer the .dmg itself as a direct download.
+      - name: Publish DMG release asset
+        if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          name: MyTaskKing ${{ inputs.release_tag }}
+          generate_release_notes: true
+          files: frontend/flutter_apps/macos_app/dist/*.dmg
