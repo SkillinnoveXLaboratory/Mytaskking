@@ -169,9 +169,12 @@ module.exports = function initSockets(server) {
 
     // Remote control is consented and session-bound. The server only relays
     // signaling/control messages after the host has approved the session.
-    socket.on('remote.join', async ({ sessionId }) => {
-      if (await remoteControl.canUse(sessionId, userId)) socket.join(`remote:${sessionId}`);
-    });
+      socket.on('remote.join', async ({ sessionId }) => {
+        if (await remoteControl.canUse(sessionId, userId)) socket.join(`remote:${sessionId}`);
+      });
+      socket.on('remote.heartbeat', async ({ sessionId }) => {
+        await remoteControl.heartbeat(sessionId, userId);
+      });
     socket.on('remote.signal', async ({ sessionId, payload }) => {
       if (!await remoteControl.canUse(sessionId, userId)) return;
       socket.to(`remote:${sessionId}`).emit('remote.signal', { sessionId, from: userId, payload });

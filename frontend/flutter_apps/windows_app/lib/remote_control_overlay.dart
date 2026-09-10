@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mytaskking_core/mytaskking_core.dart';
+import 'package:mytaskking_mobile/live_desk/remote_desktop_session.dart';
 
 import 'desktop_native.dart';
 
@@ -19,34 +22,44 @@ class _RemoteControlOverlayState extends ConsumerState<RemoteControlOverlay> {
   Map<String, dynamic>? _pending;
   Map<String, dynamic>? _active;
   final List<VoidCallback> _cleanup = [];
+  late final RemoteDesktopSession _desktopStream;
+  bool _startingHostStream = false;
+  String? _hostError;
 
   @override
   void initState() {
     super.initState();
     final rt = ref.read(realtimeProvider);
+    _desktopStream = RemoteDesktopSession(
+      rt,
+      onCaptureEnded: () => unawaited(_stop()),
+    );
     _cleanup.add(rt.onAny('remote.request', ([data]) {
       if (!mounted || data is! Map) return;
       setState(() => _pending = data.cast<String, dynamic>());
     }));
     _cleanup.add(rt.onAny('remote.approved', ([data]) {
       if (!mounted || data is! Map) return;
-      setState(() => _active = data.cast<String, dynamic>());
+      final session = data.cast<String, dynamic>();
+      if (session['hostUserId']?.toString() !=
+          ref.read(authStoreProvider).user?.id) {
+        return;
+      }
+      setState(() => _active = session);
+      unawaited(_startHosting(session));
     }));
     _cleanup.add(rt.onAny('remote.stopped', ([data]) {
       if (!mounted || data is! Map) return;
       final id = data['id']?.toString();
-      if (_active?['id']?.toString() == id) setState(() => _active = null);
+      if (_active?['id']?.toString() == id) {
+        unawaited(_desktopStream.dispose());
+        setState(() => _active = null);
+      }
     }));
     _cleanup.add(rt.onAny('remote.mouse', ([data]) {
       if (data is! Map || !mounted) return;
       if (_active?['id']?.toString() != data['sessionId']?.toString()) return;
-      DesktopNative.injectRemoteMouse(
-        x: (data['x'] as num?)?.toDouble() ?? 0.5,
-        y: (data['y'] as num?)?.toDouble() ?? 0.5,
-        action: data['action']?.toString() ?? 'move',
-        button: (data['button'] as num?)?.toInt() ?? 0,
-        delta: (data['delta'] as num?)?.toInt() ?? 0,
-      ).catchError((_) {});
+      unawaited(_injectMouse(data));
     }));
   }
 
@@ -55,6 +68,7 @@ class _RemoteControlOverlayState extends ConsumerState<RemoteControlOverlay> {
     for (final fn in _cleanup) {
       fn();
     }
+    unawaited(_desktopStream.dispose());
     super.dispose();
   }
 
@@ -69,9 +83,7 @@ class _RemoteControlOverlayState extends ConsumerState<RemoteControlOverlay> {
           _pending = null;
           _active = session;
         });
-        ref
-            .read(realtimeProvider)
-            .emit('remote.join', {'sessionId': session['id']});
+        await _startHosting(session);
       }
     } catch (_) {
       if (mounted) setState(() => _pending = null);
@@ -81,8 +93,44 @@ class _RemoteControlOverlayState extends ConsumerState<RemoteControlOverlay> {
   Future<void> _stop() async {
     final active = _active;
     if (active == null) return;
+    await _desktopStream.dispose();
     await ref.read(apiProvider).stopRemoteControl('${active['id']}');
     if (mounted) setState(() => _active = null);
+  }
+
+  Future<void> _startHosting(Map<String, dynamic> session) async {
+    if (_startingHostStream || _desktopStream.isStreaming) return;
+    _startingHostStream = true;
+    try {
+      await _desktopStream.startHosting('${session['id']}');
+    } catch (error) {
+      await ref.read(apiProvider).stopRemoteControl('${session['id']}');
+      if (mounted) {
+        setState(() {
+          _active = null;
+          _hostError =
+              'Screen sharing could not start. Check Windows screen-capture permissions and try again. ($error)';
+        });
+      }
+    } finally {
+      _startingHostStream = false;
+    }
+  }
+
+  Future<void> _injectMouse(Map data) async {
+    try {
+      await DesktopNative.injectRemoteMouse(
+        x: (data['x'] as num?)?.toDouble() ?? 0.5,
+        y: (data['y'] as num?)?.toDouble() ?? 0.5,
+        action: data['action']?.toString() ?? 'move',
+        button: (data['button'] as num?)?.toInt() ?? 0,
+        delta: (data['delta'] as num?)?.toInt() ?? 0,
+      );
+    } catch (error) {
+      if (mounted) {
+        setState(() => _hostError = 'Remote mouse control failed: $error');
+      }
+    }
   }
 
   @override
@@ -91,6 +139,21 @@ class _RemoteControlOverlayState extends ConsumerState<RemoteControlOverlay> {
     final active = _active;
     return Stack(children: [
       widget.child,
+      if (_hostError != null)
+        Positioned(
+          top: 70,
+          left: 24,
+          right: 24,
+          child: MaterialBanner(
+            content: Text(_hostError!),
+            actions: [
+              TextButton(
+                onPressed: () => setState(() => _hostError = null),
+                child: const Text('DISMISS'),
+              ),
+            ],
+          ),
+        ),
       if (active != null)
         Positioned(
             top: 12,

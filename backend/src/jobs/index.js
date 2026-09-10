@@ -6,6 +6,7 @@ const logger = require('../utils/logger');
 const notifications = require('../modules/notifications/notifications.service');
 const automations = require('../services/automations');
 const callsService = require('../modules/calls/calls.service');
+const remoteControl = require('../modules/remoteControl/remoteControl.service');
 const fcm = require('../services/fcm');
 
 // Every 15 minutes — expire clients whose access window has elapsed.
@@ -271,6 +272,19 @@ function expireRingingCallsJob() {
   }, 15_000).unref?.();
 }
 
+// Active Live Desk sessions require both approved peers to send heartbeats.
+// This closes abandoned sessions after a crash or network loss.
+function expireRemoteControlSessionsJob() {
+  setInterval(async () => {
+    try {
+      const result = await remoteControl.expireStaleSessions();
+      if (result.count) logger.info({ count: result.count }, 'jobs.remote_control.expired');
+    } catch (err) {
+      logger.warn({ err: err.message }, 'jobs.remote_control.expiry_failed');
+    }
+  }, 30_000).unref?.();
+}
+
 module.exports = function startJobs() {
   expireClientsJob();
   followupRemindersJob();
@@ -278,6 +292,7 @@ module.exports = function startJobs() {
   overdueReminderJob();
   scheduledTasksJob();
   expireRingingCallsJob();
+  expireRemoteControlSessionsJob();
   automations.startOverdueSweep();
   automations.registerSchedules().catch((err) => logger.warn({ err: err.message }, 'jobs.automations.register_failed'));
   logger.info('jobs.started');

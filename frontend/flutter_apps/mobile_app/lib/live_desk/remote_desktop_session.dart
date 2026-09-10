@@ -19,6 +19,7 @@ class RemoteDesktopSession {
   MediaStream? _displayStream;
   String? _sessionId;
   Timer? _viewerReadyRetry;
+  Timer? _heartbeat;
   bool _hosting = false;
   bool _offerSent = false;
   bool _viewerReady = false;
@@ -33,6 +34,7 @@ class RemoteDesktopSession {
     _listen();
     _peer = await _createPeer();
     _join();
+    _startHeartbeat();
 
     // This runs directly from the host's Allow action, so macOS can show its
     // system Screen Recording picker/permission prompt with clear intent.
@@ -72,6 +74,7 @@ class RemoteDesktopSession {
     _listen();
     _peer = await _createPeer();
     _join();
+    _startHeartbeat();
     // A room join is asynchronous on the server. Retry briefly so the host
     // receives this even when it is still opening the macOS capture picker.
     _notifyViewerReady();
@@ -85,21 +88,25 @@ class RemoteDesktopSession {
   }
 
   void _listen() {
-    _cleanup.add(_realtime.onAny('remote.signal', ([data]) {
-      if (data is! Map) return;
-      final event = data.cast<String, dynamic>();
-      if (event['sessionId']?.toString() != _sessionId) return;
-      final payload = event['payload'];
-      if (payload is Map) {
-        unawaited(_handleSignal(payload.cast<String, dynamic>()));
-      }
-    }));
-    _cleanup.add(_realtime.onAny('remote.viewer-ready', ([data]) {
-      if (!_hosting || data is! Map) return;
-      if (data['sessionId']?.toString() != _sessionId) return;
-      _viewerReady = true;
-      unawaited(_sendOffer());
-    }));
+    _cleanup.add(
+      _realtime.onAny('remote.signal', ([data]) {
+        if (data is! Map) return;
+        final event = data.cast<String, dynamic>();
+        if (event['sessionId']?.toString() != _sessionId) return;
+        final payload = event['payload'];
+        if (payload is Map) {
+          unawaited(_handleSignal(payload.cast<String, dynamic>()));
+        }
+      }),
+    );
+    _cleanup.add(
+      _realtime.onAny('remote.viewer-ready', ([data]) {
+        if (!_hosting || data is! Map) return;
+        if (data['sessionId']?.toString() != _sessionId) return;
+        _viewerReady = true;
+        unawaited(_sendOffer());
+      }),
+    );
   }
 
   Future<RTCPeerConnection> _createPeer() async {
@@ -122,6 +129,19 @@ class RemoteDesktopSession {
 
   void _join() => _realtime.emit('remote.join', {'sessionId': _sessionId});
 
+  void _startHeartbeat() {
+    void send() {
+      final sessionId = _sessionId;
+      if (sessionId == null) return;
+      // Rejoin makes the signaling room durable across Socket.IO reconnects.
+      _join();
+      _realtime.emit('remote.heartbeat', {'sessionId': sessionId});
+    }
+
+    send();
+    _heartbeat = Timer.periodic(const Duration(seconds: 20), (_) => send());
+  }
+
   void _notifyViewerReady() {
     final sessionId = _sessionId;
     if (sessionId != null) {
@@ -132,8 +152,10 @@ class RemoteDesktopSession {
   void _sendSignal(Map<String, dynamic> payload) {
     final sessionId = _sessionId;
     if (sessionId == null) return;
-    _realtime
-        .emit('remote.signal', {'sessionId': sessionId, 'payload': payload});
+    _realtime.emit('remote.signal', {
+      'sessionId': sessionId,
+      'payload': payload,
+    });
   }
 
   Future<void> _sendOffer() async {
@@ -195,6 +217,8 @@ class RemoteDesktopSession {
     _cleanup.clear();
     _viewerReadyRetry?.cancel();
     _viewerReadyRetry = null;
+    _heartbeat?.cancel();
+    _heartbeat = null;
     _pendingCandidates.clear();
     remoteStream.value = null;
     final display = _displayStream;

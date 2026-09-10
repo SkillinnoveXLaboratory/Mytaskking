@@ -3,6 +3,19 @@
 const prisma = require('../../database/prisma');
 const { BadRequest, Conflict } = require('../../utils/errors');
 
+const ACTIVE_SESSION_TTL_MS = 90 * 1000;
+
+function activeSessionCutoff() {
+  return new Date(Date.now() - ACTIVE_SESSION_TTL_MS);
+}
+
+async function expireStaleSessions() {
+  return prisma.remoteControlSession.updateMany({
+    where: { status: 'ACTIVE', lastHeartbeatAt: { lt: activeSessionCutoff() } },
+    data: { status: 'STOPPED', stoppedAt: new Date() },
+  });
+}
+
 function idForComputer(computerId) {
   return String(computerId || '').trim().toUpperCase();
 }
@@ -32,6 +45,7 @@ function publicSession(session) {
     createdAt: session.createdAt,
     approvedAt: session.approvedAt,
     stoppedAt: session.stoppedAt,
+    lastHeartbeatAt: session.lastHeartbeatAt,
     lastSeenAt: session.computer.lastSeenAt,
   };
 }
@@ -85,6 +99,7 @@ async function renameComputer({ id, computerName, hostUserId, tenantId }) {
 
 async function requestSession({ computerId, controllerUserId, tenantId }) {
   const normalizedId = idForComputer(computerId);
+  await expireStaleSessions();
   return prisma.$transaction(async (tx) => {
     const computer = await tx.remoteComputer.findUnique({
       where: { tenantId_computerId: { tenantId, computerId: normalizedId } },
@@ -121,7 +136,7 @@ async function requestSession({ computerId, controllerUserId, tenantId }) {
 async function approve(id, hostUserId) {
   const result = await prisma.remoteControlSession.updateMany({
     where: { id, hostUserId, status: 'PENDING' },
-    data: { status: 'ACTIVE', approvedAt: new Date() },
+    data: { status: 'ACTIVE', approvedAt: new Date(), lastHeartbeatAt: new Date() },
   });
   if (result.count === 0) return null;
   const session = await prisma.remoteControlSession.findUnique({
@@ -153,6 +168,7 @@ async function canUse(id, userId, status = 'ACTIVE') {
     where: {
       id,
       status,
+      ...(status === 'ACTIVE' ? { lastHeartbeatAt: { gte: activeSessionCutoff() } } : {}),
       OR: [{ hostUserId: userId }, { controllerUserId: userId }],
     },
     select: { id: true },
@@ -160,7 +176,20 @@ async function canUse(id, userId, status = 'ACTIVE') {
   return session !== null;
 }
 
+async function heartbeat(id, userId) {
+  const result = await prisma.remoteControlSession.updateMany({
+    where: {
+      id,
+      status: 'ACTIVE',
+      OR: [{ hostUserId: userId }, { controllerUserId: userId }],
+    },
+    data: { lastHeartbeatAt: new Date() },
+  });
+  return result.count > 0;
+}
+
 async function listForUser(userId, tenantId) {
+  await expireStaleSessions();
   const sessions = await prisma.remoteControlSession.findMany({
     where: {
       computer: { is: { tenantId } },
@@ -181,5 +210,7 @@ module.exports = {
   approve,
   stop,
   canUse,
+  heartbeat,
+  expireStaleSessions,
   listForUser,
 };

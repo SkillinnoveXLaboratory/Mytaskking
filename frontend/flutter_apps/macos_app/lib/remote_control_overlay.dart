@@ -24,6 +24,7 @@ class _RemoteControlOverlayState extends ConsumerState<RemoteControlOverlay> {
   final List<VoidCallback> _cleanup = [];
   late final RemoteDesktopSession _desktopStream;
   bool _startingHostStream = false;
+  String? _hostError;
 
   @override
   void initState() {
@@ -43,9 +44,9 @@ class _RemoteControlOverlayState extends ConsumerState<RemoteControlOverlay> {
       rt.onAny('remote.approved', ([data]) {
         if (!mounted || data is! Map) return;
         final session = data.cast<String, dynamic>();
-        setState(() => _active = session);
         if (session['hostUserId']?.toString() ==
             ref.read(authStoreProvider).user?.id) {
+          setState(() => _active = session);
           unawaited(_startHosting(session));
         }
       }),
@@ -64,13 +65,7 @@ class _RemoteControlOverlayState extends ConsumerState<RemoteControlOverlay> {
       rt.onAny('remote.mouse', ([data]) {
         if (data is! Map || !mounted) return;
         if (_active?['id']?.toString() != data['sessionId']?.toString()) return;
-        DesktopNative.injectRemoteMouse(
-          x: (data['x'] as num?)?.toDouble() ?? 0.5,
-          y: (data['y'] as num?)?.toDouble() ?? 0.5,
-          action: data['action']?.toString() ?? 'move',
-          button: (data['button'] as num?)?.toInt() ?? 0,
-          delta: (data['delta'] as num?)?.toInt() ?? 0,
-        ).catchError((_) {});
+        unawaited(_injectMouse(data));
       }),
     );
   }
@@ -88,9 +83,8 @@ class _RemoteControlOverlayState extends ConsumerState<RemoteControlOverlay> {
     final pending = _pending;
     if (pending == null) return;
     try {
-      final session = await ref
-          .read(apiProvider)
-          .approveRemoteControl('${pending['id']}');
+      final session =
+          await ref.read(apiProvider).approveRemoteControl('${pending['id']}');
       if (mounted) {
         setState(() {
           _pending = null;
@@ -108,11 +102,17 @@ class _RemoteControlOverlayState extends ConsumerState<RemoteControlOverlay> {
     _startingHostStream = true;
     try {
       await _desktopStream.startHosting('${session['id']}');
-    } catch (_) {
+    } catch (error) {
       // Screen Recording can be denied in macOS. End the server session so a
       // controller never sees an active but blank remote-control state.
       await ref.read(apiProvider).stopRemoteControl('${session['id']}');
-      if (mounted) setState(() => _active = null);
+      if (mounted) {
+        setState(() {
+          _active = null;
+          _hostError =
+              'Screen sharing could not start. Allow Screen Recording for MyTaskKing in macOS System Settings, then try again. ($error)';
+        });
+      }
     } finally {
       _startingHostStream = false;
     }
@@ -126,6 +126,23 @@ class _RemoteControlOverlayState extends ConsumerState<RemoteControlOverlay> {
     if (mounted) setState(() => _active = null);
   }
 
+  Future<void> _injectMouse(Map data) async {
+    try {
+      await DesktopNative.injectRemoteMouse(
+        x: (data['x'] as num?)?.toDouble() ?? 0.5,
+        y: (data['y'] as num?)?.toDouble() ?? 0.5,
+        action: data['action']?.toString() ?? 'move',
+        button: (data['button'] as num?)?.toInt() ?? 0,
+        delta: (data['delta'] as num?)?.toInt() ?? 0,
+      );
+    } catch (error) {
+      if (mounted) {
+        setState(() => _hostError =
+            'Remote mouse control needs Accessibility permission in macOS System Settings. ($error)');
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final pending = _pending;
@@ -133,6 +150,21 @@ class _RemoteControlOverlayState extends ConsumerState<RemoteControlOverlay> {
     return Stack(
       children: [
         widget.child,
+        if (_hostError != null)
+          Positioned(
+            top: 70,
+            left: 24,
+            right: 24,
+            child: MaterialBanner(
+              content: Text(_hostError!),
+              actions: [
+                TextButton(
+                  onPressed: () => setState(() => _hostError = null),
+                  child: const Text('DISMISS'),
+                ),
+              ],
+            ),
+          ),
         if (active != null)
           Positioned(
             top: 12,

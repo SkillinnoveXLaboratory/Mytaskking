@@ -48,7 +48,10 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
     _offApproved = rt.onAny('remote.approved', ([data]) {
       if (data is! Map) return;
       final session = data.cast<String, dynamic>();
-      unawaited(_startViewing(session));
+      if (session['controllerUserId']?.toString() ==
+          ref.read(authStoreProvider).user?.id) {
+        unawaited(_startViewing(session));
+      }
     });
     _offStopped = rt.onAny('remote.stopped', ([data]) {
       if (data is! Map ||
@@ -159,6 +162,15 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
             .toList();
         _hostComputer = host;
       });
+      final currentUserId = ref.read(authStoreProvider).user?.id;
+      final activeControllerSession = _sessions.where(
+        (session) =>
+            session['status'] == 'ACTIVE' &&
+            session['controllerUserId']?.toString() == currentUserId,
+      );
+      if (_viewingSession == null && activeControllerSession.isNotEmpty) {
+        unawaited(_startViewing(activeControllerSession.first));
+      }
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     }
@@ -199,9 +211,7 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
     final host = _hostComputer;
     if (host == null) {
       return _run(
-        () => ref
-            .read(apiProvider)
-            .registerRemoteComputer(
+        () => ref.read(apiProvider).registerRemoteComputer(
               computerId: _computerId.text.trim(),
               computerName: _computerName.text.trim(),
               platform: 'WINDOWS',
@@ -209,9 +219,7 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
       );
     }
     return _run(
-      () => ref
-          .read(apiProvider)
-          .renameRemoteComputer(
+      () => ref.read(apiProvider).renameRemoteComputer(
             computerRecordId: '${host['id']}',
             computerName: _computerName.text.trim(),
           ),
@@ -277,13 +285,13 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
                           onPressed: _busy
                               ? null
                               : () => _run(
-                                  () => ref
-                                      .read(apiProvider)
-                                      .requestRemoteControl(
-                                        computerId: _connectComputerId.text
-                                            .trim(),
-                                      ),
-                                ),
+                                    () => ref
+                                        .read(apiProvider)
+                                        .requestRemoteControl(
+                                          computerId:
+                                              _connectComputerId.text.trim(),
+                                        ),
+                                  ),
                           icon: const Icon(Icons.send),
                           label: const Text('Request access'),
                         ),
