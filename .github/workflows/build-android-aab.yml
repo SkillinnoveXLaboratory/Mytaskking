@@ -52,6 +52,8 @@ jobs:
           keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
           keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
           storeFile=app/upload-keystore.jks
+          # The uploaded key is a PKCS#12 store despite its .jks filename.
+          storeType=pkcs12
           EOF
 
       - name: Build release app bundle
