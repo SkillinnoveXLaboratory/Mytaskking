@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="MyTaskKing brings chat, tasks, calls, field work, telecaller CRM, attendance, and desktop activity into one secure workspace."
+    >
+    <title>MyTaskKing | Work, in one place</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    >
+    <style>
+      :root {
+        --ink: #202124;
+        --muted: #5f6368;
+        --line: #dadce0;
+        --blue: #1a73e8;
+        --blue-pale: #e8f0fe;
+        --paper: #fff;
+        --wash: #f4f8fe;
+        --night: #090b0e;
+        --green: #36d67c;
+        --shadow: 0 18px 45px rgba(24, 55, 92, 0.12);
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        color: var(--ink);
+        background: var(--wash);
+        font-family: Manrope, sans-serif;
+        line-height: 1.55;
+        scrollbar-color: var(--blue) transparent;
+        scrollbar-width: thin;
+        -webkit-font-smoothing: antialiased;
+      }
+      ::-webkit-scrollbar {
+        width: 10px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--blue);
+        border: 2px solid transparent;
+        border-radius: 999px;
+        background-clip: padding-box;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background-color: #155fc0;
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+      button {
+        font: inherit;
+      }
+      .wrap {
+        width: min(1180px, calc(100% - 48px));
+        margin: auto;
+      }
+      .eyebrow {
+        color: var(--blue);
+        font:
+          700 0.73rem/1 "DM Mono",
+          monospace;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      .topbar {
+        background: #fff;
+        border-bottom: 1px solid var(--line);
+        position: sticky;
+        top: 0;
+        z-index: 10;
+      }
+      .nav {
+        height: 72px;
+        align-items: center;
+        display: flex;
+        justify-content: space-between;
+        gap: 24px;
+      }
+      .brand {
+        align-items: center;
+        display: inline-flex;
+        font-size: 1.12rem;
+        font-weight: 800;
+        letter-spacing: -0.045em;
+        gap: 10px;
+      }
+      .mark {
+        align-items: center;
+        background: var(--blue);
+        border-radius: 12px;
+        color: #fff;
+        display: inline-flex;
+        font:
+          700 14px/1 "DM Mono",
+          monospace;
+        height: 46px;
+        justify-content: center;
+        object-fit: cover;
+        transform: rotate(-4deg);
+        width: 46px;
+      }
+      .navlinks {
+        display: flex;
+        gap: 26px;
+        align-items: center;
+        color: var(--muted);
+        font-size: 0.83rem;
+        font-weight: 700;
+      }
+      .navlinks a:hover {
+        color: var(--blue);
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 10px 19px;
+        font-size: 0.82rem;
+        font-weight: 800;
+        transition: 0.2s ease;
+      }
+      .pill:hover {
+        border-color: var(--blue);
+        color: var(--blue);
+        transform: translateY(-1px);
+      }
+      .pill.primary {
+        background: var(--blue);
+        border-color: var(--blue);
+        color: #fff;
+      }
+      .pill.primary:hover {
+        background: #155fc0;
+        color: #fff;
+      }
+      .hero {
+        background: var(--night);
+        color: #fff;
+        overflow: hidden;
+        position: relative;
+      }
+      .hero:before {
+        background: radial-gradient(
+          circle,
+          rgba(40, 134, 255, 0.3) 0 2px,
+          transparent 2.5px
+        );
+        background-size: 26px 26px;
+        content: "";
+        height: 420px;
+        opacity: 0.32;
+        position: absolute;
+        right: -100px;
+        top: -100px;
+        width: 520px;
+      }
+      .hero-grid {
+        min-height: 565px;
+        align-items: center;
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 64px;
+        padding: 74px 0;
+        position: relative;
+      }
+      .hero h1 {
+        font-size: clamp(3rem, 6vw, 5.7rem);
+        letter-spacing: -0.08em;
+        line-height: 0.98;
+        max-width: 680px;
+      }
+      .hero h1 span {
+        color: #73abff;
+      }
+      .hero-copy {
+        color: #aab4c2;
+        font-size: 1.05rem;
+        max-width: 540px;
+        margin: 27px 0 34px;
+      }
+      .actions {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .hero .pill {
+        border-color: #586271;
+        color: #fff;
+      }
+      .hero .pill.primary {
+        border-color: var(--blue);
+      }
+      .hero-note {
+        color: #8993a0;
+        display: block;
+        font:
+          400 0.72rem/1.5 "DM Mono",
+          monospace;
+        margin-top: 17px;
+      }
+      .workspace {
+        aspect-ratio: 2764 / 1536;
+        background: #0f5cc8;
+        border: 1px solid #3f7fe1;
+        border-radius: 14px;
+        box-shadow: 20px 28px 0 rgba(63, 126, 224, 0.16);
+        overflow: hidden;
+        transform: rotate(2.5deg);
+      }
+      .hero-visual {
+        display: block;
+        height: 100%;
+        object-fit: contain;
+        width: 100%;
+      }
+      section {
+        background: #fff;
+        padding: 102px 0;
+      }
+      .intro {
+        text-align: center;
+      }
+      .intro h2,
+      .section-head h2 {
+        font-size: clamp(2rem, 4vw, 3.45rem);
+        letter-spacing: -0.065em;
+        line-height: 1.08;
+        margin: 12px auto 18px;
+      }
+      .intro p,
+      .section-head p {
+        color: var(--muted);
+        max-width: 660px;
+        margin: auto;
+      }
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1px;
+        background: var(--line);
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        margin-top: 55px;
+        overflow: hidden;
+      }
+      .stat {
+        background: #fff;
+        padding: 25px;
+        text-align: left;
+      }
+      .stat strong {
+        font-size: 1.6rem;
+        letter-spacing: -0.06em;
+        display: block;
+      }
+      .stat span {
+        color: var(--muted);
+        font-size: 0.76rem;
+        font-weight: 700;
+      }
+      .how {
+        background: var(--blue-pale);
+      }
+      .section-head {
+        max-width: 730px;
+      }
+      .how .section-head {
+        text-align: center;
+        margin: auto;
+      }
+      .steps {
+        counter-reset: step;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 22px;
+        margin-top: 50px;
+      }
+      .step {
+        background: #fff;
+        border-radius: 12px;
+        min-height: 244px;
+        padding: 28px;
+        position: relative;
+      }
+      .step:before {
+        color: #9dbff5;
+        content: "0" counter(step);
+        counter-increment: step;
+        display: block;
+        font:
+          500 2.4rem/1 "DM Mono",
+          monospace;
+        letter-spacing: -0.1em;
+        margin-bottom: 38px;
+      }
+      .step h3 {
+        font-size: 1.04rem;
+        letter-spacing: -0.035em;
+        margin-bottom: 10px;
+      }
+      .step p {
+        color: var(--muted);
+        font-size: 0.87rem;
+      }
+      .platforms {
+        background: #fff;
+      }
+      .platforms .section-head {
+        margin-bottom: 42px;
+      }
+      .platform-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+      }
+      .platform {
+        border: 1px solid var(--line);
+        border-radius: 13px;
+        overflow: hidden;
+      }
+      .platform-top {
+        aspect-ratio: 16 / 9;
+        background: #edf4ff;
+        overflow: hidden;
+      }
+      .platform-visual {
+        display: block;
+        height: 100%;
+        object-fit: cover;
+        width: 100%;
+      }
+      .platform-content {
+        padding: 28px;
+      }
+      .platform-content h3 {
+        font-size: 1.65rem;
+        letter-spacing: -0.06em;
+      }
+      .platform-content > p {
+        color: var(--muted);
+        font-size: 0.9rem;
+        margin: 10px 0 20px;
+      }
+      .features {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .features li {
+        font-size: 0.79rem;
+        font-weight: 700;
+        list-style: none;
+        padding-left: 18px;
+        position: relative;
+      }
+      .features li:before {
+        color: var(--blue);
+        content: "+";
+        font-weight: 800;
+        left: 0;
+        position: absolute;
+      }
+      .feature-groups {
+        display: grid;
+        gap: 19px;
+      }
+      .feature-group h4 {
+        color: var(--blue);
+        font:
+          700 0.68rem/1 "DM Mono",
+          monospace;
+        letter-spacing: 0.1em;
+        margin-bottom: 10px;
+        text-transform: uppercase;
+      }
+      .downloads {
+        background: #101318;
+        color: #fff;
+      }
+      .downloads .section-head p {
+        color: #aeb7c4;
+      }
+      .downloads .section-head h2 {
+        max-width: 650px;
+      }
+      .release-version {
+        align-items: center;
+        background: rgba(115, 171, 255, 0.13);
+        border: 1px solid rgba(115, 171, 255, 0.36);
+        border-radius: 999px;
+        color: #d8e7ff;
+        display: inline-flex;
+        font: 500 0.72rem/1 "DM Mono", monospace;
+        gap: 8px;
+        margin-top: 22px;
+        padding: 9px 13px;
+      }
+      .release-version strong {
+        color: #fff;
+        font-weight: 700;
+      }
+      .download-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 13px;
+        margin-top: 46px;
+      }
+      .download-card {
+        background: #1a1f27;
+        border: 1px solid #303846;
+        border-radius: 11px;
+        display: flex;
+        flex-direction: column;
+        min-height: 224px;
+        padding: 22px;
+        transition:
+          transform 0.2s,
+          border-color 0.2s;
+      }
+      .download-card:hover {
+        border-color: #659ef0;
+        transform: translateY(-4px);
+      }
+      .download-card .os {
+        display: block;
+        height: 32px;
+        object-fit: contain;
+        object-position: left center;
+        width: 32px;
+      }
+      .download-card .os.apple-logo {
+        filter: invert(1);
+      }
+      .download-card h3 {
+        font-size: 1rem;
+        margin: 18px 0 6px;
+      }
+      .download-card p {
+        color: #9da8b7;
+        font-size: 0.76rem;
+      }
+      .download-card .pill {
+        border-color: #526072;
+        color: #fff;
+        font-size: 0.72rem;
+        margin-top: auto;
+        padding: 8px 13px;
+        width: max-content;
+      }
+      .download-card .pill:hover {
+        background: var(--blue);
+        border-color: var(--blue);
+      }
+      .security {
+        background: #fff;
+      }
+      .security-grid {
+        display: grid;
+        grid-template-columns: 0.9fr 1.1fr;
+        gap: 80px;
+        align-items: center;
+      }
+      .security-art {
+        background: #102d5c;
+        border-radius: 13px;
+        min-height: 330px;
+        padding: 26px;
+        position: relative;
+        overflow: hidden;
+      }
+      .security-art:after {
+        border: 40px solid rgba(115, 171, 255, 0.14);
+        border-radius: 50%;
+        content: "";
+        height: 260px;
+        position: absolute;
+        right: -93px;
+        top: -76px;
+        width: 260px;
+      }
+      .lock {
+        border: 1px solid #6fa5ff;
+        border-radius: 50%;
+        color: #fff;
+        font-size: 68px;
+        height: 135px;
+        left: 50%;
+        line-height: 125px;
+        position: absolute;
+        text-align: center;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: 135px;
+      }
+      .security-copy h2 {
+        font-size: clamp(2rem, 4vw, 3.3rem);
+        letter-spacing: -0.065em;
+        line-height: 1.08;
+        margin: 12px 0 20px;
+      }
+      .security-copy p {
+        color: var(--muted);
+        margin-bottom: 25px;
+      }
+      .security-copy li {
+        border-top: 1px solid var(--line);
+        font-size: 0.89rem;
+        font-weight: 700;
+        list-style: none;
+        padding: 14px 0;
+      }
+      .security-copy li:last-child {
+        border-bottom: 1px solid var(--line);
+      }
+      footer {
+        background: #fff;
+        border-top: 1px solid var(--line);
+        padding: 35px 0;
+      }
+      .foot {
+        align-items: center;
+        color: var(--muted);
+        display: flex;
+        font-size: 0.75rem;
+        justify-content: space-between;
+        gap: 20px;
+      }
+      .foot .brand {
+        color: var(--ink);
+      }
+      @media (max-width: 800px) {
+        .navlinks {
+          display: none;
+        }
+        .hero-grid,
+        .security-grid {
+          grid-template-columns: 1fr;
+        }
+        .hero-grid {
+          padding: 66px 0 45px;
+          gap: 45px;
+        }
+        .workspace {
+          max-width: 450px;
+          margin: auto;
+        }
+        .stats,
+        .download-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+        .steps,
+        .platform-grid {
+          grid-template-columns: 1fr;
+        }
+        .security-grid {
+          gap: 35px;
+        }
+        section {
+          padding: 72px 0;
+        }
+        .download-card {
+          min-height: 190px;
+        }
+      }
+      @media (max-width: 480px) {
+        .wrap {
+          width: min(100% - 32px, 1180px);
+        }
+        .topbar .pill {
+          display: none;
+        }
+        .hero h1 {
+          font-size: 3.2rem;
+        }
+        .stats,
+        .download-grid,
+        .features {
+          grid-template-columns: 1fr;
+        }
+        .foot {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <nav class="nav wrap" aria-label="Main navigation">
+        <a class="brand" href="#top"
+          ><img class="mark" src="public/icons/logo.jpg" alt=""> MyTaskKing</a
+        >
+        <div class="navlinks">
+          <a href="#how">How it works</a><a href="#platforms">Platforms</a
+          ><a href="#downloads">Downloads</a><a href="#security">Security</a>
+        </div>
+        <a class="pill primary" href="#downloads">Download app</a>
+      </nav>
+    </header>
+    <main id="top">
+      <section class="hero">
+        <div class="hero-grid wrap">
+          <div>
+            <p class="eyebrow">One connected workspace</p>
+            <h1>Work moves <span>better</span> together.</h1>
+            <p class="hero-copy">
+              MyTaskKing brings your people, tasks, customers, calls, field
+              work, and daily operations into one secure, realtime workspace.
+            </p>
+            <div class="actions">
+              <a class="pill primary" href="#downloads">Get MyTaskKing</a
+              ><a class="pill" href="#how">Explore how it works</a>
+            </div>
+            <small class="hero-note"
+              >Available for Android, Windows, macOS and Linux</small
+            >
+          </div>
+          <div class="workspace">
+            <img
+              class="hero-visual"
+              src="public/images/hero_bg.png"
+              alt="MyTaskKing workspace shown across desktop and mobile devices"
+            >
+          </div>
+        </div>
+      </section>
+      <section class="intro">
+        <div class="wrap">
+          <p class="eyebrow">Built for every working day</p>
+          <h2>
+            Everything your team needs.<br>Nothing spread across five apps.
+          </h2>
+          <p>
+            Coordinate the office, field force, sales desk, managers, and
+            clients with an experience tailored to every role.
+          </p>
+          <div class="stats">
+            <div class="stat">
+              <strong>9 roles</strong><span>Purpose-built workspaces</span>
+            </div>
+            <div class="stat">
+              <strong>Realtime</strong
+              ><span>Chat, calls &amp; notifications</span>
+            </div>
+            <div class="stat">
+              <strong>Multi-device</strong
+              ><span>Mobile and desktop access</span>
+            </div>
+            <div class="stat">
+              <strong>Secure</strong><span>Tenant-isolated data</span>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="how" id="how">
+        <div class="wrap">
+          <div class="section-head">
+            <p class="eyebrow">How it works</p>
+            <h2>A clearer way to run the workday.</h2>
+            <p>
+              MyTaskKing gives each person the tools they need, while keeping
+              every conversation and outcome connected.
+            </p>
+          </div>
+          <div class="steps">
+            <article class="step">
+              <h3>Enter your workspace</h3>
+              <p>
+                Sign in securely with your organization’s tenant, user ID, and
+                password. Every organization stays in its own protected
+                workspace.
+              </p>
+            </article>
+            <article class="step">
+              <h3>Plan and coordinate</h3>
+              <p>
+                Chat in channels, assign tasks, run meetings, share files, and
+                keep deadlines visible without switching tools.
+              </p>
+            </article>
+            <article class="step">
+              <h3>See work move forward</h3>
+              <p>
+                Managers get live activity, field visits, attendance, reports,
+                and role-aware dashboards to make timely decisions.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+      <section class="platforms" id="platforms">
+        <div class="wrap">
+          <div class="section-head">
+            <p class="eyebrow">Made for the way you work</p>
+            <h2>Powerful in the field.<br>Focused at your desk.</h2>
+            <p>
+              Use one connected account across the devices that fit your role
+              and workday.
+            </p>
+          </div>
+          <div class="platform-grid">
+            <article class="platform mobile">
+              <div class="platform-top">
+                <img
+                  class="platform-visual"
+                  src="public/images/mytaskking_mobile_ad.png"
+                  alt="MyTaskKing mobile app shown on a phone"
+                >
+              </div>
+              <div class="platform-content">
+                <h3>Take work with you</h3>
+                <p>
+                  Android and iOS-ready workforce tools for teams on the move,
+                  in front of customers, or away from the desk.
+                </p>
+                <div class="feature-groups">
+                  <div class="feature-group">
+                    <h4>Daily collaboration</h4>
+                    <ul class="features">
+                      <li>Realtime chat, threads and reactions</li>
+                      <li>Task boards, subtasks and comments</li>
+                      <li>Voice, video and group calls</li>
+                      <li>Meetings, calendar and reminders</li>
+                      <li>Files, images and voice notes</li>
+                      <li>Search, saved items and presence</li>
+                    </ul>
+                  </div>
+                  <div class="feature-group">
+                    <h4>Workforce operations</h4>
+                    <ul class="features">
+                      <li>Push notifications and announcements</li>
+                      <li>Attendance clock-in and workday history</li>
+                      <li>GPS-aware field tracking</li>
+                      <li>Leave requests and reports</li>
+                      <li>Secure sessions and profile controls</li>
+                      <li>Emergency alerts and organization TTS</li>
+                    </ul>
+                  </div>
+                  <div class="feature-group">
+                    <h4>Sales and field force</h4>
+                    <ul class="features">
+                      <li>Telecaller CRM and click-to-call</li>
+                      <li>Lead pipelines and follow-up queues</li>
+                      <li>Outlet visits with GPS proof</li>
+                      <li>Product catalog and order capture</li>
+                      <li>Manager field-team visibility</li>
+                      <li>Role-aware client access</li>
+                    </ul>
+                  </div>
+                  <div class="feature-group">
+                    <h4>Role-aware workspaces</h4>
+                    <ul class="features">
+                      <li>Employee: chat, tasks, calls and attendance</li>
+                      <li>Manager: team work, clients and field oversight</li>
+                      <li>Project coordinator: project and task delivery</li>
+                      <li>Admin: people, access and organization control</li>
+                      <li>Super admin: tenants, payments and support</li>
+                      <li>Sales head: organization pipeline and notes</li>
+                      <li>Telecaller: leads, calls and follow-up queues</li>
+                      <li>Executive: route, outlet visit and order tools</li>
+                      <li>Client: time-limited assigned-channel access</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </article>
+            <article class="platform desktop">
+              <div class="platform-top">
+                <img
+                  class="platform-visual"
+                  src="public/images/mytaskking_desktop_ad.png"
+                  alt="MyTaskKing desktop workspace shown on a laptop"
+                >
+              </div>
+              <div class="platform-content">
+                <h3>Keep the office connected</h3>
+                <p>
+                  Native Windows, macOS, and Linux workspaces for focused
+                  collaboration, visibility, and secure support.
+                </p>
+                <div class="feature-groups">
+                  <div class="feature-group">
+                    <h4>Everyday desktop work</h4>
+                    <ul class="features">
+                      <li>Chat-first workspace and channels</li>
+                      <li>Tasks, files, search and notifications</li>
+                      <li>Presence, profile and session controls</li>
+                      <li>System tray and autostart</li>
+                      <li>Desktop login location capture</li>
+                      <li>Client access protection</li>
+                    </ul>
+                  </div>
+                  <div class="feature-group">
+                    <h4>Work activity</h4>
+                    <ul class="features">
+                      <li>Periodic activity screenshots</li>
+                      <li>Configurable capture intervals</li>
+                      <li>Workday evidence and summaries</li>
+                      <li>Background activity agent</li>
+                      <li>Windows and Linux office support</li>
+                      <li>macOS-native window and menu bar</li>
+                    </ul>
+                  </div>
+                  <div class="feature-group">
+                    <h4>Connected support</h4>
+                    <ul class="features">
+                      <li>Live Desk request and consent flow</li>
+                      <li>Visible remote-control session indicator</li>
+                      <li>Screen sharing on supported desktop hosts</li>
+                      <li>Permission-based mouse control</li>
+                      <li>macOS calls and meeting support</li>
+                      <li>Windows, macOS and Linux installers</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+      <section class="downloads" id="downloads">
+        <div class="wrap">
+          <div class="section-head">
+            <p class="eyebrow">Get the app</p>
+            <h2>Choose your platform.<br>Get to work.</h2>
+            <p>
+              Select your device below to download the current installer
+              directly. Your organization administrator provides your login
+              details.
+            </p>
+            <div class="release-version">
+              Latest version <strong>v1.0.0</strong>
+            </div>
+          </div>
+          <div class="download-grid">
+            <a
+              class="download-card"
+               href="public/mytaskking-android.apk"
+               download="mytaskking-android.apk"
+              ><img
+                class="os"
+                src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/android/android-original.svg"
+                alt="Android logo"
+              >
+              <h3>Android APK</h3>
+              <p>For Android phones and tablets.</p>
+              <span class="pill">Download APK</span></a
+            ><a
+              class="download-card"
+               href="public/mytaskking-linux-installer.exe"
+               download="mytaskking-windows-installer.exe"
+              ><img
+                class="os"
+                src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/windows11/windows11-original.svg"
+                alt="Windows logo"
+              >
+              <h3>Windows</h3>
+              <p>Windows desktop installer.</p>
+              <span class="pill">Download .exe</span></a
+            ><a
+              class="download-card"
+               href="public/mytaskking-macos-installer.dmg"
+               download="mytaskking-macos-installer.dmg"
+              ><img
+                class="os apple-logo"
+                src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/apple/apple-original.svg"
+                alt="Apple logo"
+              >
+              <h3>macOS</h3>
+              <p>macOS disk image installer.</p>
+              <span class="pill">Download .dmg</span></a
+            ><a
+              class="download-card"
+               href="public/mytaskking-linux-installer.zip"
+               download="mytaskking-linux-installer.zip"
+              ><img
+                class="os"
+                src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/linux/linux-original.svg"
+                alt="Linux logo"
+              >
+              <h3>Linux</h3>
+              <p>Linux desktop installer archive.</p>
+              <span class="pill">Download .zip</span></a
+            >
+          </div>
+        </div>
+      </section>
+      <section class="security" id="security">
+        <div class="wrap security-grid">
+          <div class="security-art" aria-hidden="true">
+            <div class="lock">⌑</div>
+          </div>
+          <div class="security-copy">
+            <p class="eyebrow">Enterprise-ready by design</p>
+            <h2>Your organization’s work stays yours.</h2>
+            <p>
+              MyTaskKing is built for organizations that need a practical
+              workspace without compromising on control, visibility, or data
+              boundaries.
+            </p>
+            <ul>
+              <li>Tenant-isolated organization workspaces</li>
+              <li>Role-based access across every feature</li>
+              <li>Session management and device controls</li>
+              <li>Realtime collaboration with audit-ready operations</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
+    <footer>
+      <div class="foot wrap">
+        <a class="brand" href="#top"
+          ><img class="mark" src="public/icons/logo.jpg" alt=""> MyTaskKing</a
+        ><span>One workspace for teams that move work forward.</span
+        ><a
+          href="https://github.com/SkillinnoveXLaboratory/Mytaskking"
+          target="_blank"
+          rel="noreferrer"
+          >GitHub project ↗</a
+        ><a href="/privacy">Privacy Policy</a
+        >
+      </div>
+    </footer>
+  </body>
+</html>

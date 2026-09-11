@@ -1,0 +1,6 @@
+Mytaskking_landing/public/*.apk filter=lfs diff=lfs merge=lfs -text
+Mytaskking_landing/public/*.dmg filter=lfs diff=lfs merge=lfs -text
+Mytaskking_landing/public/*.exe filter=lfs diff=lfs merge=lfs -text
+Mytaskking_landing/public/*.zip filter=lfs diff=lfs merge=lfs -text
+Mytaskking_landing/public/icons/*.jpg filter=lfs diff=lfs merge=lfs -text
+Mytaskking_landing/public/images/*.png filter=lfs diff=lfs merge=lfs -text
