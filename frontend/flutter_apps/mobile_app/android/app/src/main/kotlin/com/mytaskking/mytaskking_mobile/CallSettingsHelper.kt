@@ -1,4 +1,4 @@
-package com.mytaskking.mytaskking_mobile
+package com.mytaskking.workspace
 
 import android.content.ActivityNotFoundException
 import android.content.ComponentName

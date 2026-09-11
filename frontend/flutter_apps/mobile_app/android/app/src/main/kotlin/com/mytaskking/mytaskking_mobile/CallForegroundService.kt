@@ -1,4 +1,4 @@
-package com.mytaskking.mytaskking_mobile
+package com.mytaskking.workspace
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -129,7 +129,7 @@ class CallForegroundService : Service() {
     }
 
     companion object {
-        const val ACTION_STOP = "com.mytaskking.mytaskking_mobile.STOP_ACTIVE_CALL"
+        const val ACTION_STOP = "com.mytaskking.workspace.STOP_ACTIVE_CALL"
         const val EXTRA_TITLE = "title"
         const val EXTRA_BODY = "body"
         const val EXTRA_CALL_ID = "callId"

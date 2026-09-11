@@ -1,4 +1,4 @@
-package com.mytaskking.mytaskking_mobile
+package com.mytaskking.workspace
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -320,7 +320,7 @@ class IncomingCallForegroundService : Service() {
     }
 
     companion object {
-        const val ACTION_STOP = "com.mytaskking.mytaskking_mobile.STOP_INCOMING_CALL"
+        const val ACTION_STOP = "com.mytaskking.workspace.STOP_INCOMING_CALL"
         const val EXTRA_NOTIFICATION_ID = "notificationId"
         const val EXTRA_TYPE = "type"
         const val EXTRA_TITLE = "title"

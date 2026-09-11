@@ -1,4 +1,4 @@
-package com.mytaskking.mytaskking_mobile
+package com.mytaskking.workspace
 
 import android.app.NotificationManager
 import android.app.RemoteInput
@@ -75,8 +75,8 @@ class NotificationActionReceiver : BroadcastReceiver() {
     }
 
     companion object {
-        const val ACTION_CALL_DECLINE = "com.mytaskking.mytaskking_mobile.ACTION_CALL_DECLINE"
-        const val ACTION_CHAT_REPLY = "com.mytaskking.mytaskking_mobile.ACTION_CHAT_REPLY"
+        const val ACTION_CALL_DECLINE = "com.mytaskking.workspace.ACTION_CALL_DECLINE"
+        const val ACTION_CHAT_REPLY = "com.mytaskking.workspace.ACTION_CHAT_REPLY"
         const val EXTRA_NOTIFICATION_ID = "notificationId"
         const val EXTRA_API_BASE_URL = "apiBaseUrl"
         const val EXTRA_ACTION_TOKEN = "actionToken"

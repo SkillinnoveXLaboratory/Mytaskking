@@ -1,4 +1,4 @@
-package com.mytaskking.mytaskking_mobile
+package com.mytaskking.workspace
 
 import android.app.NotificationManager
 import android.content.Intent

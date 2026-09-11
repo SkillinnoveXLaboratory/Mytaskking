@@ -1,4 +1,4 @@
-package com.mytaskking.mytaskking_mobile
+package com.mytaskking.workspace
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -77,7 +77,7 @@ class TelecallerRecordingForegroundService : Service() {
     }
 
     companion object {
-        const val ACTION_STOP = "com.mytaskking.mytaskking_mobile.STOP_TELECALLER_RECORDING"
+        const val ACTION_STOP = "com.mytaskking.workspace.STOP_TELECALLER_RECORDING"
         const val EXTRA_CALL_ID = "callId"
         const val EXTRA_TITLE = "title"
         const val EXTRA_BODY = "body"
