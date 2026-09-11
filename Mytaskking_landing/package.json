@@ -1,0 +1,13 @@
+{
+  "name": "mytaskking-landing",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MyTaskKing product landing page and download portal.",
+  "scripts": {
+    "build": "node --check server.js",
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20 <25"
+  }
+}
