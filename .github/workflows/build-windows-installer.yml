@@ -1,8 +1,16 @@
 name: Build Windows Installer
 
 on:
-  # Windows installer builds are paused; start them manually from Actions.
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/build-windows-installer.yml"
+      - "frontend/flutter_apps/windows_app/**"
+      - "frontend/flutter_apps/mobile_app/**"
+      - "frontend/flutter_apps/shared_core/**"
+      - "frontend/flutter_apps/shared_design_system/**"
 
 jobs:
   build-windows-installer:

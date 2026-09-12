@@ -6,8 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:mytaskking_core/mytaskking_core.dart';
-import 'package:mytaskking_mobile/live_desk/remote_desktop_session.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'live_desk_sfu_session.dart';
 
 class LiveDeskScreen extends ConsumerStatefulWidget {
   const LiveDeskScreen({super.key});
@@ -27,7 +28,7 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
   bool _busy = false;
   String? _error;
   Map<String, dynamic>? _viewingSession;
-  late final RemoteDesktopSession _desktopStream;
+  late final LiveDeskSfuSession _desktopStream;
   final RTCVideoRenderer _renderer = RTCVideoRenderer();
   VoidCallback? _offApproved;
   VoidCallback? _offStopped;
@@ -41,7 +42,7 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
   void initState() {
     super.initState();
     _localComputerIdFuture = _localComputerId();
-    _desktopStream = RemoteDesktopSession(ref.read(realtimeProvider));
+    _desktopStream = LiveDeskSfuSession(ref.read(realtimeProvider));
     _desktopStream.remoteStream.addListener(_bindRemoteStream);
     unawaited(_initializeRenderer());
     final rt = ref.read(realtimeProvider);
@@ -109,7 +110,10 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
       _error = null;
     });
     try {
-      await _desktopStream.startViewing('${session['id']}');
+      final media = await ref
+          .read(apiProvider)
+          .remoteControlMedia('${session['id']}');
+      await _desktopStream.startViewing('${session['id']}', media);
       if (mounted) setState(() {});
     } catch (e) {
       if (mounted) setState(() => _error = 'Could not start live stream: $e');
@@ -328,7 +332,7 @@ class _LiveDeskScreenState extends ConsumerState<LiveDeskScreen> {
                       child: _renderer.srcObject == null
                           ? const Center(
                               child: Text(
-                                'Waiting for the approved Mac to share its screen...',
+                                'Waiting for the approved Windows host to share its screen...',
                                 style: TextStyle(color: Colors.white),
                               ),
                             )

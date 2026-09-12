@@ -2,6 +2,7 @@
 
 const prisma = require('../../database/prisma');
 const { BadRequest, Conflict } = require('../../utils/errors');
+const mediasoup = require('../../services/mediasoup');
 
 const ACTIVE_SESSION_TTL_MS = 90 * 1000;
 
@@ -188,6 +189,25 @@ async function heartbeat(id, userId) {
   return result.count > 0;
 }
 
+/**
+ * Live Desk media always gets its own SFU room. It is deliberately separate
+ * from call and meeting room names so a remote-control approval cannot grant
+ * access to either of those features.
+ */
+async function prepareMediaSession(id, user) {
+  if (!await canUse(id, user.id)) return null;
+  const channelName = `live-desk-${id}`;
+  const media = await mediasoup.prepareCallRoom(
+    channelName,
+    user.id,
+    user.name || 'Live Desk participant',
+  );
+  return {
+    ...media,
+    mode: 'LIVE_DESK_SCREEN_ONLY',
+  };
+}
+
 async function listForUser(userId, tenantId) {
   await expireStaleSessions();
   const sessions = await prisma.remoteControlSession.findMany({
@@ -211,6 +231,7 @@ module.exports = {
   stop,
   canUse,
   heartbeat,
+  prepareMediaSession,
   expireStaleSessions,
   listForUser,
 };

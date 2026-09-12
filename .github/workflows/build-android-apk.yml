@@ -1,15 +1,8 @@
 name: Build Android APK
 
 on:
+  # Android builds are paused. Start this workflow manually when an APK is needed.
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/build-android-apk.yml"
-      - "frontend/flutter_apps/mobile_app/**"
-      - "frontend/flutter_apps/shared_core/**"
-      - "frontend/flutter_apps/shared_design_system/**"
 
 permissions:
   contents: read

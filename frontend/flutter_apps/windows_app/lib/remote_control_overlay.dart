@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mytaskking_core/mytaskking_core.dart';
-import 'package:mytaskking_mobile/live_desk/remote_desktop_session.dart';
+import 'live_desk_sfu_session.dart';
 
 import 'desktop_native.dart';
 
@@ -22,7 +22,7 @@ class _RemoteControlOverlayState extends ConsumerState<RemoteControlOverlay> {
   Map<String, dynamic>? _pending;
   Map<String, dynamic>? _active;
   final List<VoidCallback> _cleanup = [];
-  late final RemoteDesktopSession _desktopStream;
+  late final LiveDeskSfuSession _desktopStream;
   bool _startingHostStream = false;
   String? _hostError;
 
@@ -30,7 +30,7 @@ class _RemoteControlOverlayState extends ConsumerState<RemoteControlOverlay> {
   void initState() {
     super.initState();
     final rt = ref.read(realtimeProvider);
-    _desktopStream = RemoteDesktopSession(
+    _desktopStream = LiveDeskSfuSession(
       rt,
       onCaptureEnded: () => unawaited(_stop()),
     );
@@ -102,7 +102,10 @@ class _RemoteControlOverlayState extends ConsumerState<RemoteControlOverlay> {
     if (_startingHostStream || _desktopStream.isStreaming) return;
     _startingHostStream = true;
     try {
-      await _desktopStream.startHosting('${session['id']}');
+      final media = await ref
+          .read(apiProvider)
+          .remoteControlMedia('${session['id']}');
+      await _desktopStream.startHosting('${session['id']}', media);
     } catch (error) {
       await ref.read(apiProvider).stopRemoteControl('${session['id']}');
       if (mounted) {

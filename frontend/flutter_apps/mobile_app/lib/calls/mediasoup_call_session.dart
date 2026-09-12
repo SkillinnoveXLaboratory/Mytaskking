@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
-import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:mediasfu_mediasoup_client/mediasfu_mediasoup_client.dart';
 // ignore: implementation_imports
 import 'package:mediasfu_mediasoup_client/src/handlers/handler_interface.dart'
@@ -61,6 +60,8 @@ class MediasoupCallSession {
   void Function()? onNeedsRejoin;
   void Function()? onStateChanged;
   void Function(Object error)? onError;
+  /// Used by Live Desk to end the approved session if host capture ends.
+  void Function()? onScreenShareEnded;
 
   // --- Internals ---
 
@@ -130,6 +131,7 @@ class MediasoupCallSession {
     required String roomId,
     required String userName,
     bool video = false,
+    bool screenOnly = false,
     String? joinToken,
   }) async {
     if (_connecting) {
@@ -151,7 +153,7 @@ class MediasoupCallSession {
       final joinResult = await _joinRoom(roomId, userName, joinToken: joinToken);
       await _loadDevice(joinResult);
       await _createTransports(roomId);
-      await _produceLocalMedia(video: video);
+      await _produceLocalMedia(video: video, audio: !screenOnly);
       await _consumeExistingProducers(joinResult);
       // Match HTML: media is live — force playout path again after first
       // produce/consume (ADM often only binds after getUserMedia).
@@ -576,6 +578,7 @@ class MediasoupCallSession {
     } catch (_) {}
     track.onEnded = () {
       unawaited(stopScreenShare());
+      onScreenShareEnded?.call();
     };
 
     await _produceTrack(
@@ -898,29 +901,32 @@ class MediasoupCallSession {
     };
   }
 
-  Future<void> _produceLocalMedia({required bool video}) async {
+  Future<void> _produceLocalMedia({required bool video, required bool audio}) async {
+    if (!audio && !video) return;
     // Explicit AEC/NS like proven flutter_webrtc call setups; fall back if
     // the device rejects constraint maps. Prefer facingMode for mobile cams.
     final videoConstraints =
         video ? _portraitVideoConstraints(front: _useFrontCamera) : false;
     try {
       localStream = await navigator.mediaDevices.getUserMedia({
-        'audio': {
-          'echoCancellation': true,
-          'noiseSuppression': true,
-          'autoGainControl': true,
-        },
+        'audio': audio
+            ? {
+                'echoCancellation': true,
+                'noiseSuppression': true,
+                'autoGainControl': true,
+              }
+            : false,
         'video': videoConstraints,
       });
     } catch (_) {
       try {
         localStream = await navigator.mediaDevices.getUserMedia({
-          'audio': true,
+          'audio': audio,
           'video': video,
         });
       } catch (e) {
         // Last resort: audio-only so the call still connects.
-        if (video) {
+        if (video && audio) {
           localStream = await navigator.mediaDevices.getUserMedia({
             'audio': true,
             'video': false,
@@ -932,14 +938,16 @@ class MediasoupCallSession {
       }
     }
 
-    for (final track in localStream!.getAudioTracks()) {
-      track.enabled = true;
-      await _produceTrack(
-        track: track,
-        stream: localStream!,
-        source: 'mic',
-        onReady: (producer) => _audioProducer = producer,
-      );
+    if (audio) {
+      for (final track in localStream!.getAudioTracks()) {
+        track.enabled = true;
+        await _produceTrack(
+          track: track,
+          stream: localStream!,
+          source: 'mic',
+          onReady: (producer) => _audioProducer = producer,
+        );
+      }
     }
 
     if (video) {
@@ -1172,6 +1180,8 @@ class MediasoupCallSession {
 
     if (_screenStream != null) {
       for (final track in _screenStream!.getTracks()) {
+        // Explicit teardown must not be reported as the user ending capture.
+        track.onEnded = null;
         await track.stop();
       }
       await _screenStream!.dispose();

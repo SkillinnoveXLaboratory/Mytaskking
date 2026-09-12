@@ -1180,6 +1180,10 @@ extension BestieApiExt on BestieApi {
   Future<Map<String, dynamic>> approveRemoteControl(String sessionId) =>
       post('/remote-control/$sessionId/approve');
 
+  /// Returns a short-lived, session-authorized SFU join payload for Live Desk.
+  Future<Map<String, dynamic>> remoteControlMedia(String sessionId) =>
+      post('/remote-control/$sessionId/media');
+
   Future<Map<String, dynamic>> stopRemoteControl(String sessionId) =>
       post('/remote-control/$sessionId/stop');
 

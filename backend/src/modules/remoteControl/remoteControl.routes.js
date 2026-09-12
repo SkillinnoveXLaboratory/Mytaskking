@@ -67,6 +67,16 @@ router.post('/:id/approve', asyncHandler(async (req, res) => {
   res.json(session);
 }));
 
+// This is intentionally a Live Desk-only room. Calls and meetings keep their
+// existing room and authorization flows.
+router.post('/:id/media', asyncHandler(async (req, res) => {
+  const media = await service.prepareMediaSession(req.params.id, req.user);
+  if (!media) {
+    return res.status(403).json({ error: 'An active approved remote session is required' });
+  }
+  res.json(media);
+}));
+
 router.post('/:id/stop', asyncHandler(async (req, res) => {
   const session = await service.stop(req.params.id, req.user.id);
   if (!session) return res.status(404).json({ error: 'Remote session not found' });
