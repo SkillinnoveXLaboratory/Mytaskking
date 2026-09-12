@@ -33,6 +33,7 @@ import 'org_tts_provider.dart';
 import 'telecaller_recording_setup.dart';
 import 'services/device_integrity_gate.dart';
 import 'services/employee_gps_lifecycle.dart';
+import 'widgets/announcement_popup_overlay.dart';
 
 const _foregroundNotificationsChannelId = 'foreground_notifications_silent';
 const _notificationReplyActionId = 'bestie.reply';
@@ -728,8 +729,10 @@ class _BestieAppState extends ConsumerState<BestieApp> {
                             child: EmployeeGpsLifecycle(
                               child: IncomingCallOverlay(
                                 child: OngoingCallBar(
-                                  child: ConnectivityBanner(
-                                    child: child ?? const SizedBox.shrink(),
+                                  child: AnnouncementPopupOverlay(
+                                    child: ConnectivityBanner(
+                                      child: child ?? const SizedBox.shrink(),
+                                    ),
                                   ),
                                 ),
                               ),

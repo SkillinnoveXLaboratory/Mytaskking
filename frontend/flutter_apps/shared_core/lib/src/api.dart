@@ -378,6 +378,12 @@ extension BestieApiExt on BestieApi {
   Future<List<Map<String, dynamic>>> listAnnouncements() => get(
     '/announcements',
   ).then((r) => List<Map<String, dynamic>>.from(r['items'] ?? const []));
+  Future<Map<String, dynamic>?> latestAnnouncement() => get(
+    '/announcements/latest',
+  ).then((r) {
+    final item = r['item'];
+    return item is Map ? Map<String, dynamic>.from(item) : null;
+  });
   Future<void> ackAnnouncement(String id) async {
     await post('/announcements/$id/ack');
   }
